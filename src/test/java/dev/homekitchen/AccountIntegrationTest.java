@@ -99,6 +99,24 @@ class AccountIntegrationTest {
     }
 
     @Test
+    void theSameLoginUsesTheRoleStoredForEachAccount() throws Exception {
+        String password = UUID.randomUUID().toString();
+        jdbc.update("update kitchen_account set password_hash = ? where username in ('account_admin', 'account_one')",
+                passwords.encode(password));
+
+        for (var example : Map.of("Account_Admin", "ADMIN", "account_one", "GUEST").entrySet()) {
+            var login = mvc.perform(post("/api/login").with(csrf())
+                            .param("username", example.getKey()).param("password", password))
+                    .andExpect(status().isNoContent())
+                    .andReturn();
+            var session = (MockHttpSession) login.getRequest().getSession(false);
+            mvc.perform(get("/api/session").session(session))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.user.role").value(example.getValue()));
+        }
+    }
+
+    @Test
     void onlyTheOwnerOrAdminCanReadAnOrderAndOnlyAdminCanUpdateIt() throws Exception {
         long id = order(1);
         mvc.perform(get("/api/orders/{id}", id).with(guestOne())).andExpect(status().isOk());

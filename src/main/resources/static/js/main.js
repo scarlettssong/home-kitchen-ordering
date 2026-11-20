@@ -15,7 +15,7 @@ let currentCategory = 'Chinese';
 let submitting = false;
 let session;
 let recipeDish;
-let authMode = 'GUEST';
+let registering = false;
 let returnToCart = false;
 
 const isAdmin = () => session?.user?.role === 'ADMIN';
@@ -320,17 +320,14 @@ dialog.addEventListener('click', event => {
 });
 byId('place-order').addEventListener('click', placeOrder);
 
-function setAuthMode(mode) {
-    authMode = mode;
-    const isRegistering = mode === 'REGISTER';
-    byId('register-nickname').hidden = !isRegistering;
-    byId('toggle-register').hidden = mode === 'ADMIN';
-    byId('toggle-register').textContent = isRegistering ? '返回访客登录' : '新食客注册';
-    byId('auth-submit').textContent = isRegistering ? '注册并登录' : mode === 'ADMIN' ? '店长登录' : '访客登录';
-    byId('auth-form').elements.password.autocomplete = isRegistering ? 'new-password' : 'current-password';
-    for (const choice of document.querySelectorAll('[data-auth]')) {
-        choice.setAttribute('aria-pressed', String(choice.dataset.auth === (isRegistering ? 'GUEST' : mode)));
-    }
+function setRegistrationMode(enabled) {
+    registering = enabled;
+    byId('register-nickname').hidden = !enabled;
+    byId('toggle-register').textContent = enabled ? '返回登录' : '新食客注册';
+    byId('auth-submit').textContent = enabled ? '注册并登录' : '登录';
+    const password = byId('auth-form').elements.password;
+    password.value = '';
+    password.autocomplete = enabled ? 'new-password' : 'current-password';
 }
 
 async function loadSession() {
@@ -361,25 +358,21 @@ function renderProfile() {
 async function submitAuth(event) {
     event.preventDefault();
     const form = event.currentTarget;
-    const mode = authMode;
     const fields = new FormData(form);
     const username = String(fields.get('username')).trim();
     const password = String(fields.get('password'));
     const submit = byId('auth-submit');
+    const registration = byId('toggle-register');
     submit.disabled = true;
+    registration.disabled = true;
     showNotice();
     try {
         if (!session) await loadSession();
-        if (mode === 'REGISTER') {
+        if (registering) {
             await sendJson('/api/register', 'POST', { username, password, nickname: fields.get('nickname') });
         }
         await request('/api/login', { method: 'POST', body: new URLSearchParams({ username, password }) });
         await loadSession();
-        if (session.user.role !== (mode === 'ADMIN' ? 'ADMIN' : 'GUEST')) {
-            await request('/api/logout', { method: 'POST' });
-            await loadSession();
-            throw new Error('请使用与你账号身份对应的登录入口。');
-        }
         form.reset();
         showNotice(`欢迎，${session.user.nickname}。`);
         if (returnToCart) {
@@ -392,6 +385,7 @@ async function submitAuth(event) {
     } finally {
         form.elements.password.value = '';
         submit.disabled = false;
+        registration.disabled = false;
     }
 }
 
@@ -402,7 +396,7 @@ async function logout() {
         byId('order-history-list').replaceChildren();
         await loadSession();
         renderCart();
-        setAuthMode('GUEST');
+        setRegistrationMode(false);
         showNotice('已退出登录。');
     } catch (error) {
         showNotice(error.message, true);
@@ -657,10 +651,7 @@ function activateCategory(category) {
 }
 
 byId('refresh-orders').addEventListener('click', refreshOrders);
-for (const choice of document.querySelectorAll('[data-auth]')) {
-    choice.addEventListener('click', () => setAuthMode(choice.dataset.auth));
-}
-byId('toggle-register').addEventListener('click', () => setAuthMode(authMode === 'REGISTER' ? 'GUEST' : 'REGISTER'));
+byId('toggle-register').addEventListener('click', () => setRegistrationMode(!registering));
 byId('auth-form').addEventListener('submit', submitAuth);
 byId('logout').addEventListener('click', logout);
 byId('nickname-form').addEventListener('submit', saveNickname);
@@ -681,6 +672,5 @@ byId('delete-dish').addEventListener('click', deleteDish);
 editor.addEventListener('submit', saveDish);
 dialog.addEventListener('close', clearPreviewUrl);
 
-setAuthMode('GUEST');
 renderCart();
 Promise.all([loadSession(), loadDishesFromServer()]).catch(error => showNotice(error.message, true));

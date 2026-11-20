@@ -55,17 +55,13 @@
             <section id="unlogged-box" class="auth-box">
                 <span class="welcome-icon" aria-hidden="true">🍳</span>
                 <h2>欢迎光临小厨房</h2>
-                <div class="auth-choices" aria-label="登录入口">
-                    <button type="button" class="secondary-btn" data-auth="GUEST">访客登录</button>
-                    <button type="button" class="secondary-btn" data-auth="ADMIN">店长登录</button>
-                </div>
                 <form id="auth-form" class="form-fields">
                     <label>用户名<input name="username" required autocomplete="username" maxlength="40"></label>
                     <label id="register-nickname" hidden>昵称（选填）<input name="nickname" maxlength="60"></label>
                     <label>密码<input name="password" type="password" required autocomplete="current-password" maxlength="72"></label>
-                    <button id="auth-submit" class="primary-btn">访客登录</button>
-                    <button id="toggle-register" type="button" class="secondary-btn">新食客注册</button>
+                    <button id="auth-submit" class="primary-btn">登录</button>
                 </form>
+                <button id="toggle-register" type="button" class="secondary-btn">新食客注册</button>
             </section>
             <section id="logged-box" class="profile-panel" hidden>
                 <div class="profile-header-area">

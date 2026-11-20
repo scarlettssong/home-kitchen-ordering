@@ -28,12 +28,12 @@ Open [http://127.0.0.1:8080](http://127.0.0.1:8080). The app binds to loopback b
 
 ## Local accounts
 
-Use **我的 → 新食客注册** to create a guest. Guests can browse without signing in and use **访客登录** to place orders, view their own order history, edit their nickname, and manage favorites.
+Use **我的 → 新食客注册** to create a guest. Guests can browse without signing in. Guests and managers both sign in with a username and password under **我的 → 登录**. The account role determines access. A signed-in guest can place orders, view their own order history, edit their nickname, and manage favorites.
 
 To create a local manager, set the following environment variables before starting the app. Choose a new password when prompted.
 
 ```sh
-export KITCHEN_ADMIN_USERNAME=local_manager
+export KITCHEN_ADMIN_USERNAME=demo_manager
 printf 'New local manager password: '
 read -rs KITCHEN_ADMIN_PASSWORD
 printf '\n'
@@ -41,7 +41,15 @@ export KITCHEN_ADMIN_PASSWORD
 mvn spring-boot:run
 ```
 
-The first startup with these variables creates the manager with a BCrypt password hash. Later startups keep that account's existing password. The manager uses **我的 → 店长登录**, can manage the kitchen avatar and dishes, and sees all orders. Registration always creates a guest.
+The first startup with these variables creates the manager with a BCrypt password hash. Later startups keep that account's existing password. The manager can manage the kitchen avatar and dishes and sees all orders. Registration always creates a guest.
+
+To change an existing manager's password on a local database, use the same `DB_URL`, `DB_USER`, and `DB_PASSWORD` as the application. The tool prompts for the new password without displaying it and writes only its BCrypt hash.
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install 'psycopg[binary]' bcrypt
+.venv/bin/python tools/set_local_manager_password.py demo_manager
+```
 
 ## Demo walkthrough
 
@@ -76,7 +84,7 @@ export TEST_DB_PASSWORD='<password chosen at the prompt>'
 mvn verify
 ```
 
-The integration tests exercise the HTTP endpoints against PostgreSQL. They cover session login and logout, CSRF, guest and manager permissions, private order history, menu changes and deletion, image limits, nickname and favorites, the three-portion limit, and price snapshots.
+The integration tests exercise the HTTP endpoints against PostgreSQL. They cover the shared login for guests and managers, logout, CSRF, guest and manager permissions, private order history, menu changes and deletion, image limits, nickname and favorites, the three-portion limit, and price snapshots.
 
 ## Ordering rules
 
