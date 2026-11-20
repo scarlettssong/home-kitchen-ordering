@@ -2,6 +2,7 @@
 """Set a new BCrypt password for an existing manager in a loopback PostgreSQL database."""
 import argparse
 from getpass import getpass
+from hmac import compare_digest
 import os
 import re
 import sys
@@ -46,11 +47,16 @@ def main():
 
     new_name = args.rename_to or args.username
     digest = bcrypt.hashpw(encoded, bcrypt.gensalt(rounds=10)).decode("ascii")
+    credentials = {
+        "user": os.environ["DB_USER"],
+        "password": os.environ["DB_PASSWORD"],
+        "options": "-c search_path=public",
+    }
     try:
-        with psycopg.connect(dsn, user=os.environ["DB_USER"], password=os.environ["DB_PASSWORD"]) as connection:
+        with psycopg.connect(dsn, **credentials) as connection:
             updated = connection.execute(
                 """
-                update kitchen_account
+                update public.kitchen_account
                 set username = %s, password_hash = %s
                 where username = %s and role = 'ADMIN'
                 returning id
@@ -59,9 +65,24 @@ def main():
             ).fetchone()
             if not updated:
                 parser.exit(1, "No manager account matched that username.\n")
+
+        # A new connection can only see the saved hash after the write commits.
+        with psycopg.connect(dsn, **credentials) as connection:
+            saved = connection.execute(
+                """
+                select current_database(), current_schema(), password_hash
+                from public.kitchen_account
+                where id = %s and username = %s and role = 'ADMIN'
+                """,
+                (updated[0], new_name),
+            ).fetchone()
+            if not saved or not compare_digest(saved[2], digest):
+                parser.exit(1, "Could not verify the committed manager password.\n")
     except psycopg.errors.UniqueViolation:
         parser.exit(1, "The requested username is already in use.\n")
-    print(f"Updated manager login for {new_name}.")
+    except psycopg.OperationalError:
+        parser.exit(1, "Could not connect to local PostgreSQL to confirm the password reset.\n")
+    print(f"Password saved and verified for {new_name} in {saved[0]}.{saved[1]}.")
 
 
 if __name__ == "__main__":

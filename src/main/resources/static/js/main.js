@@ -43,7 +43,9 @@ async function request(path, options = {}) {
     if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         const hints = { 401: '请检查登录信息或重新登录。', 403: '没有权限执行此操作。', 413: '图片不能超过 1 MB。' };
-        throw new Error(hints[response.status] ?? error.detail ?? '请求失败，请稍后重试。');
+        const failure = new Error(hints[response.status] ?? error.detail ?? '请求失败，请稍后重试。');
+        failure.status = response.status;
+        throw failure;
     }
     return response.headers.get('content-type')?.includes('application/json') ? response.json() : null;
 }
@@ -371,8 +373,19 @@ async function submitAuth(event) {
         if (registering) {
             await sendJson('/api/register', 'POST', { username, password, nickname: fields.get('nickname') });
         }
-        await request('/api/login', { method: 'POST', body: new URLSearchParams({ username, password }) });
-        await loadSession();
+        try {
+            await request('/api/login', { method: 'POST', body: new URLSearchParams({ username, password }) });
+        } catch (error) {
+            if (error.status === 401) throw new Error('用户名或密码不正确。');
+            if (error.status === 403) throw new Error('登录表单已过期，请刷新页面后重试。');
+            throw error;
+        }
+        try {
+            await loadSession();
+            if (!session.user) throw new Error();
+        } catch {
+            throw new Error('账号验证成功，但未能建立登录会话。请刷新当前页面后重试。');
+        }
         form.reset();
         showNotice(`欢迎，${session.user.nickname}。`);
         if (returnToCart) {

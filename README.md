@@ -43,7 +43,7 @@ mvn spring-boot:run
 
 The first startup with these variables creates the manager with a BCrypt password hash. Later startups keep that account's existing password. The manager can manage the kitchen avatar and dishes and sees all orders. Registration always creates a guest.
 
-To change an existing manager's password on a local database, use the same `DB_URL`, `DB_USER`, and `DB_PASSWORD` as the application. The tool prompts for the new password without displaying it and writes only its BCrypt hash.
+To change an existing manager's password on a local database, use the same `DB_URL`, `DB_USER`, and `DB_PASSWORD` as the application. The tool prompts for the new password without displaying it and writes only its BCrypt hash. It reports the database and schema after reading the committed hash from a new connection.
 
 ```sh
 python3 -m venv .venv

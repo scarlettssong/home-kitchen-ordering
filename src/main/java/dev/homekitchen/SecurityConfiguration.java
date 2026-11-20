@@ -1,6 +1,8 @@
 package dev.homekitchen;
 
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -11,6 +13,8 @@ import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 class SecurityConfiguration {
+    private static final Logger LOG = LoggerFactory.getLogger(SecurityConfiguration.class);
+
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -36,10 +40,14 @@ class SecurityConfiguration {
                         .accessDeniedHandler((request, response, failure) ->
                                 response.setStatus(HttpServletResponse.SC_FORBIDDEN)))
                 .formLogin(login -> login.loginProcessingUrl("/api/login")
-                        .successHandler((request, response, authentication) ->
-                                response.setStatus(HttpServletResponse.SC_NO_CONTENT))
-                        .failureHandler((request, response, failure) ->
-                                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED))
+                        .successHandler((request, response, authentication) -> {
+                            LOG.debug("POST /api/login authenticated; returning 204");
+                            response.setStatus(HttpServletResponse.SC_NO_CONTENT);
+                        })
+                        .failureHandler((request, response, failure) -> {
+                            LOG.debug("POST /api/login rejected ({}); returning 401", failure.getClass().getSimpleName());
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        })
                         .permitAll())
                 .logout(logout -> logout.logoutUrl("/api/logout")
                         .logoutSuccessHandler((request, response, authentication) ->
