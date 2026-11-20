@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Kitchen Menu</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script defer src="/js/main.js"></script>
+</head>
+<body>
+    <div id="app-wrapper">
+        <header class="header"><h1>Home Kitchen Menu</h1></header>
+        <p id="notice" role="status" hidden></p>
+
+        <main id="view-menu" class="main-container">
+            <nav class="sidebar" aria-label="Menu categories">
+                <button class="sidebar-item active" type="button" data-category="Chinese">Chinese</button>
+                <button class="sidebar-item" type="button" data-category="Western">Western</button>
+                <button class="sidebar-item" type="button" data-category="Japanese">Japanese</button>
+                <button class="sidebar-item" type="button" data-category="Dessert">Dessert</button>
+            </nav>
+            <section class="dish-list" aria-labelledby="menu-title">
+                <h2 id="menu-title">Chinese menu</h2>
+                <div id="full-dish-list">Loading menu…</div>
+            </section>
+            <button class="cart-fab" id="cart-fab" type="button" aria-label="Open cart (0 items)">
+                <span aria-hidden="true">🛒</span><span class="cart-badge" id="cart-badge" aria-hidden="true">0</span>
+            </button>
+        </main>
+
+        <main id="view-cart" class="main-view" hidden>
+            <h2>Your cart</h2>
+            <div id="cart-items-container"></div>
+            <div class="cart-checkout">
+                <div class="cart-summary"><span>Estimated total</span><strong id="cart-total">$0.00</strong></div>
+                <button id="place-order" class="primary-btn" type="button">Place order</button>
+            </div>
+        </main>
+
+        <main id="view-order" class="main-view" hidden>
+            <div class="view-heading">
+                <h2>Kitchen orders</h2>
+                <button id="refresh-orders" class="secondary-btn" type="button">Refresh</button>
+            </div>
+            <div id="order-history-list"></div>
+        </main>
+
+        <nav class="bottom-nav" aria-label="Main navigation">
+            <button class="nav-item active" type="button" data-view="view-menu" aria-current="page">
+                <span class="nav-icon" aria-hidden="true">🍴</span>Menu
+            </button>
+            <button class="nav-item" type="button" data-view="view-cart">
+                <span class="nav-icon" aria-hidden="true">🛒</span>Cart
+            </button>
+            <button class="nav-item" type="button" data-view="view-order">
+                <span class="nav-icon" aria-hidden="true">🧑‍🍳</span>Kitchen
+            </button>
+        </nav>
+    </div>
+</body>
+</html>

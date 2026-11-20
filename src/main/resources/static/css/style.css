@@ -1,0 +1,339 @@
+/* ================= 1. 核心重置与全局修复 (防缩放) ================= */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* 彻底禁止点击时的缩放行为和蓝框反馈 */
+button, .counter-btn, .add-btn, .nav-item, .sidebar-item {
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: pointer;
+}
+
+/* 强制输入框字号为16px，防止iOS聚焦时自动放大页面 */
+input { font-size: 16px !important; }
+
+body {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: #f7f8fa;
+}
+
+/* ================= 2. 头部 Header ================= */
+.header {
+    background-color: #fbc531;
+    padding: 45px 20px 20px 20px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.header h1 { font-size: 18px; color: #333; }
+
+/* ================= 3. 主体菜单布局 ================= */
+.main-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    background-color: #fff;
+}
+
+/* 左侧边栏 */
+.sidebar {
+    width: 85px;
+    background-color: #f7f8fa;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+.sidebar-item {
+    padding: 22px 10px;
+    font-size: 13px;
+    color: #666;
+    text-align: center;
+    border-bottom: 1px solid #f0f0f0;
+    transition: 0.2s;
+}
+.sidebar-item.active {
+    background-color: #fff;
+    font-weight: bold;
+    color: #333;
+    border-left: 4px solid #fbc531;
+}
+
+/* 右侧菜品列表 */
+.dish-list {
+    flex: 1;
+    padding: 15px;
+    padding-bottom: 120px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.dish-card {
+    display: flex;
+    margin-bottom: 25px;
+    position: relative;
+}
+.dish-img {
+    width: 80px;
+    height: 80px;
+    border-radius: 12px;
+    object-fit: cover;
+    margin-right: 12px;
+    background: #f0f0f0;
+}
+.dish-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-right: 85px;
+}
+.dish-name { font-size: 16px; font-weight: bold; color: #333; }
+.dish-price { color: #ff4757; font-size: 15px; font-weight: bold; margin-top: 5px; }
+
+/* ================= 4. 交互组件与按钮 ================= */
+/* 统一按钮：解决登录页按钮长度不等问题 */
+.primary-btn {
+    display: block;
+    width: 100%;
+    height: 48px;
+    background-color: #fbc531;
+    color: #333;
+    border: none;
+    border-radius: 24px;
+    font-size: 16px;
+    font-weight: bold;
+    /* 关键：清除可能的浮动和偏移 */
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 0 25px; /* 增加左右内边距，给文字留白 */
+    white-space: nowrap; /* 禁止文字折行 */
+    overflow: hidden;
+    text-overflow: ellipsis; /* 如果名字实在太长，显示省略号 */
+    text-align: center;
+    box-sizing: border-box; /* 确保 padding 不会把按钮挤歪 */
+}
+
+/* 如果你的外层容器用了 flex，强制按钮占满一行 */
+.primary-btn:active, .outline-btn:active { transform: scale(0.96); opacity: 0.9; }
+
+/* 菜品计数器 */
+.add-btn {
+    position: absolute;
+    right: 0;
+    bottom: 5px;
+    background-color: #fbc531;
+    color: #333;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 28px;
+    font-weight: bold;
+    font-size: 20px;
+}
+.counter-group {
+    position: absolute;
+    right: 0;
+    bottom: 5px;
+    display: flex;
+    align-items: center;
+    background: #fff;
+    border-radius: 20px;
+    border: 1px solid #fbc531;
+    padding: 2px;
+}
+.counter-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #fbc531;
+    color: #333;
+    border: none;
+    font-weight: bold;
+    font-size: 18px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.counter-num { margin: 0 10px; font-size: 14px; font-weight: bold; min-width: 12px; text-align: center; }
+.bottom-nav {
+    background-color: #fff;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    flex-shrink: 0;
+    z-index: 100;
+    padding-top: 12px;
+    padding-bottom: calc(30px + env(safe-area-inset-bottom));
+}
+.nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 11px;
+    color: #bbb;
+    width: 33%;
+}
+.nav-item.active { color: #fbc531; font-weight: bold; }
+.nav-icon { font-size: 22px; margin-bottom: 3px;}
+.main-view { display: none; flex: 1; flex-direction: column; background-color: #f7f8fa; overflow-y: auto; }
+
+/* 悬浮购物车按钮 */
+.cart-fab {
+    position: fixed;
+    right: 20px;
+    bottom: 110px;
+    width: 55px;
+    height: 55px;
+    border-radius: 50%;
+    background-color: #333;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 26px;
+    z-index: 99;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.cart-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background-color: #ff4757;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 2px solid #333;
+}
+
+/* 历史订单卡片 */
+.history-card {
+    background: #fff;
+    padding: 18px;
+    border-radius: 16px;
+    margin: 0 15px 15px;
+    border: 1px solid #eee;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+
+
+[hidden] { display: none !important; }
+body { background: #f0ede4; color: #292722; }
+#app-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 900px);
+    height: 100dvh;
+    margin: auto;
+    background: #fff;
+    box-shadow: 0 0 40px #42370015;
+}
+.header { padding: 25px clamp(18px, 4vw, 36px); }
+.header h1 { font-size: clamp(22px, 4vw, 30px); }
+h2 { font-size: 22px; margin-bottom: 18px; }
+.sidebar { width: clamp(86px, 17vw, 145px); padding-top: 10px; }
+.sidebar-item, .nav-item { border: 0; background: transparent; }
+.sidebar-item { width: 100%; border-bottom: 1px solid #e9e9e9; border-left: 4px solid transparent; }
+.dish-list { padding: clamp(15px, 4vw, 30px); padding-bottom: 85px; }
+.dish-card {
+    align-items: center;
+    min-height: 90px;
+    padding: 12px 0;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #eee;
+}
+.dish-img {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 66px;
+    height: 66px;
+    font-size: 34px;
+    background: #fff3d1;
+}
+.dish-info { padding-right: 90px; min-width: 0; }
+.dish-description { margin-top: 5px; font-size: 14px; color: #666; }
+.dish-price { color: #a33a27; }
+.add-btn { border: none; }
+.add-btn, .counter-group { bottom: 22px; }
+.counter-btn:disabled, .primary-btn:disabled { opacity: .45; cursor: default; }
+.cart-fab { position: absolute; bottom: 92px; border: 0; }
+.cart-badge { background: #b74332; }
+.main-view {
+    display: flex;
+    gap: 14px;
+    padding: clamp(16px, 4vw, 32px);
+}
+.main-view h2 { margin: 0; }
+.bottom-nav { padding: 10px 0 max(12px, env(safe-area-inset-bottom)); }
+.nav-item { font-size: 13px; color: #5d574c; padding: 3px; }
+.nav-item.active { color: #745204; }
+.cart-row, .history-card {
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    align-items: center;
+    background: #fff;
+    padding: 16px;
+    margin: 0 0 12px;
+    border: 1px solid #e8e6e0;
+    border-radius: 14px;
+}
+.cart-row .counter-group { position: static; flex-shrink: 0; }
+.cart-checkout { margin-top: auto; }
+.cart-summary, .view-heading, .receipt-heading, .receipt-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+.cart-summary { padding: 14px 0; }
+#cart-total { color: #a33a27; font-size: 22px; }
+.secondary-btn, .history-card .primary-btn { width: auto; flex-shrink: 0; }
+.secondary-btn {
+    border: 1px solid #ddd7c8;
+    border-radius: 20px;
+    background: #fff;
+    color: #39342b;
+    padding: 9px 15px;
+    font-weight: 600;
+}
+.history-card { display: block; padding: 20px; }
+.receipt-heading { padding-bottom: 12px; border-bottom: 1px solid #eee; }
+.receipt-heading h3 { font-size: 18px; }
+.receipt-items { list-style: none; padding: 12px 0; }
+.receipt-line { padding: 5px 0; }
+.receipt-line span:last-child { white-space: nowrap; }
+.status {
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 20px;
+    padding: 6px 11px;
+    background: #fff0c2;
+    color: #6a4900;
+}
+.status.preparing { background: #e4eeff; color: #23467e; }
+.status.completed { background: #e2f1e5; color: #1c6035; }
+#notice { padding: 12px clamp(16px, 4vw, 32px); background: #e2f1e5; color: #1c6035; }
+#notice.error { background: #ffebe7; color: #95291b; }
+.empty { padding: 20px 0; color: #625b51; }
+@media (max-width: 480px) {
+    .dish-img { width: 40px; height: 40px; font-size: 24px; margin-right: 8px; }
+    .dish-card { align-items: flex-start; padding-bottom: 36px; }
+    .dish-info { padding-right: 0; }
+    .add-btn, .counter-group { bottom: 5px; }
+}
