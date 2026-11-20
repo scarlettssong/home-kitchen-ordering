@@ -55,7 +55,7 @@ class OrderingController {
 
     record OrderRequest(@NotNull @Size(min = 1, max = 30) List<@NotNull @Valid LineRequest> items) {}
 
-    record LineRequest(@NotNull @Positive Long dishId, @NotNull @Min(1) @Max(99) Integer quantity) {}
+    record LineRequest(@NotNull @Positive Long dishId, @NotNull @Min(1) @Max(3) Integer quantity) {}
 
     record StatusRequest(@NotNull KitchenOrder.Status status) {}
 }

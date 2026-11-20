@@ -1,61 +1,99 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hans">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home Kitchen Menu</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Scarlett和Cris的小厨房</title>
     <link rel="stylesheet" href="/css/style.css">
     <script defer src="/js/main.js"></script>
 </head>
 <body>
     <div id="app-wrapper">
-        <header class="header"><h1>Home Kitchen Menu</h1></header>
+        <header class="header">
+            <img src="/images/kitchen-avatar.jpg" alt="">
+            <h1>Scarlett和Cris的小厨房</h1>
+        </header>
         <p id="notice" role="status" hidden></p>
 
         <main id="view-menu" class="main-container">
-            <nav class="sidebar" aria-label="Menu categories">
-                <button class="sidebar-item active" type="button" data-category="Chinese">Chinese</button>
-                <button class="sidebar-item" type="button" data-category="Western">Western</button>
-                <button class="sidebar-item" type="button" data-category="Japanese">Japanese</button>
-                <button class="sidebar-item" type="button" data-category="Dessert">Dessert</button>
+            <nav class="sidebar" aria-label="菜系">
+                <button class="sidebar-item active" type="button" data-category="Chinese">中餐<span aria-hidden="true">🥢</span></button>
+                <button class="sidebar-item" type="button" data-category="Western">西餐<span aria-hidden="true">🍴</span></button>
+                <button class="sidebar-item" type="button" data-category="Japanese">日料<span aria-hidden="true">🍣</span></button>
+                <button class="sidebar-item" type="button" data-category="Dessert">甜品<span aria-hidden="true">🍰</span></button>
             </nav>
             <section class="dish-list" aria-labelledby="menu-title">
-                <h2 id="menu-title">Chinese menu</h2>
-                <div id="full-dish-list">Loading menu…</div>
+                <h2 id="menu-title">中餐菜单</h2>
+                <div id="full-dish-list">正在加载菜单…</div>
             </section>
-            <button class="cart-fab" id="cart-fab" type="button" aria-label="Open cart (0 items)">
+            <button class="cart-fab" id="cart-fab" type="button" aria-label="打开购物车（0 份）">
                 <span aria-hidden="true">🛒</span><span class="cart-badge" id="cart-badge" aria-hidden="true">0</span>
             </button>
         </main>
 
         <main id="view-cart" class="main-view" hidden>
-            <h2>Your cart</h2>
+            <div class="cart-title">
+                <button type="button" id="back-to-menu" aria-label="返回点餐">←</button>
+                <h2>确认菜单</h2>
+            </div>
             <div id="cart-items-container"></div>
             <div class="cart-checkout">
-                <div class="cart-summary"><span>Estimated total</span><strong id="cart-total">$0.00</strong></div>
-                <button id="place-order" class="primary-btn" type="button">Place order</button>
+                <div class="cart-summary"><span>预计总额</span><strong id="cart-total">$0.00</strong></div>
+                <button id="place-order" class="primary-btn" type="button">确认下单</button>
             </div>
         </main>
 
-        <main id="view-order" class="main-view" hidden>
+        <main id="view-order" class="main-view order-view" hidden>
             <div class="view-heading">
-                <h2>Kitchen orders</h2>
-                <button id="refresh-orders" class="secondary-btn" type="button">Refresh</button>
+                <h2>厨房订单</h2>
+                <button id="refresh-orders" class="secondary-btn" type="button">刷新</button>
             </div>
             <div id="order-history-list"></div>
         </main>
 
-        <nav class="bottom-nav" aria-label="Main navigation">
+        <main id="view-profile" class="main-view profile-view" hidden>
+            <h2>我的</h2>
+            <p>个人中心将在下一阶段开放。</p>
+        </main>
+
+        <nav class="bottom-nav" aria-label="主导航">
             <button class="nav-item active" type="button" data-view="view-menu" aria-current="page">
-                <span class="nav-icon" aria-hidden="true">🍴</span>Menu
-            </button>
-            <button class="nav-item" type="button" data-view="view-cart">
-                <span class="nav-icon" aria-hidden="true">🛒</span>Cart
+                <span class="nav-icon" aria-hidden="true">🍴</span>点餐
             </button>
             <button class="nav-item" type="button" data-view="view-order">
-                <span class="nav-icon" aria-hidden="true">🧑‍🍳</span>Kitchen
+                <span class="nav-icon" aria-hidden="true">📝</span>订单
+            </button>
+            <button class="nav-item" type="button" data-view="view-profile">
+                <span class="nav-icon" aria-hidden="true">👤</span>我的
             </button>
         </nav>
     </div>
+
+    <dialog class="modal-content" id="dish-modal" aria-labelledby="modal-title">
+        <button class="close-icon" type="button" aria-label="关闭菜谱" autofocus>×</button>
+        <div class="modal-scroll" tabindex="0" aria-label="菜谱内容">
+            <img class="modal-img" id="modal-img" alt="">
+            <div class="modal-body">
+                <h2 id="modal-title"></h2>
+                <p id="modal-price" class="dish-price"></p>
+                <p id="modal-description"></p>
+                <section class="modal-section" aria-labelledby="ingredients-title">
+                    <h3 id="ingredients-title">原料 <span lang="en">Ingredients</span></h3>
+                    <dl id="modal-ingredients"></dl>
+                </section>
+                <section class="modal-section" aria-labelledby="steps-title">
+                    <h3 id="steps-title">步骤 <span lang="en">Steps</span></h3>
+                    <ol id="modal-steps"></ol>
+                </section>
+                <section class="modal-section recipe-tips" id="modal-tips-area" aria-labelledby="tips-title" hidden>
+                    <h3 id="tips-title">💡 小 Tips</h3>
+                    <p id="modal-tips"></p>
+                </section>
+            </div>
+        </div>
+        <form class="modal-footer" method="dialog">
+            <button class="primary-btn">返回菜单</button>
+        </form>
+    </dialog>
 </body>
 </html>

@@ -34,9 +34,42 @@ class OrderingIntegrationTest {
     void menuShowsSyntheticDishesAndAvailability() throws Exception {
         mvc.perform(get("/api/dishes"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].name").value("Ginger Scallion Rice"))
+                .andExpect(jsonPath("$[0].name").value("姜葱香米饭"))
                 .andExpect(jsonPath("$[0].available").value(true))
                 .andExpect(jsonPath("$[5].available").value(false));
+    }
+
+    @Test
+    void menuReturnsPicturesAndStructuredRecipes() throws Exception {
+        mvc.perform(get("/api/dishes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].imagePath").value("/images/ginger-rice.jpg"))
+                .andExpect(jsonPath("$[0].recipe.ingredients[0].name").value("茉莉香米"))
+                .andExpect(jsonPath("$[0].recipe.ingredients[0].amount").value("200 克"))
+                .andExpect(jsonPath("$[0].recipe.steps[7]").isNotEmpty())
+                .andExpect(jsonPath("$[0].recipe.tips").isNotEmpty())
+                .andExpect(jsonPath("$[5].recipe.tips").isEmpty());
+    }
+
+    @Test
+    void enforcesThreePortionsPerDish() throws Exception {
+        mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"items":[{"dishId":1,"quantity":3},{"dishId":2,"quantity":3}]}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.items[0].quantity").value(3))
+                .andExpect(jsonPath("$.items[1].quantity").value(3))
+                .andExpect(jsonPath("$.total").value(47.25));
+
+        for (String items : new String[]{
+                "[{\"dishId\":1,\"quantity\":4}]",
+                "[{\"dishId\":1,\"quantity\":2},{\"dishId\":1,\"quantity\":2}]"
+        }) {
+            mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"items\":" + items + "}"))
+                    .andExpect(status().isBadRequest());
+        }
     }
 
     @Test
@@ -48,7 +81,7 @@ class OrderingIntegrationTest {
 
         mvc.perform(get("/api/orders/{id}", id))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].name").value("Ginger Scallion Rice"))
+                .andExpect(jsonPath("$.items[0].name").value("姜葱香米饭"))
                 .andExpect(jsonPath("$.items[0].unitPrice").value(8.50))
                 .andExpect(jsonPath("$.items[0].quantity").value(2))
                 .andExpect(jsonPath("$.total").value(17.00));
@@ -85,7 +118,7 @@ class OrderingIntegrationTest {
                 "[{\"dishId\":1,\"quantity\":100}]",
                 "[{\"dishId\":1,\"quantity\":1.5}]",
                 "[{\"dishId\":1,\"quantity\":\"2\"}]",
-                "[{\"dishId\":1,\"quantity\":60},{\"dishId\":1,\"quantity\":60}]"
+                "[{\"dishId\":1,\"quantity\":2},{\"dishId\":1,\"quantity\":2}]"
         }) {
             mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
                             .content("{\"items\":" + items + "}"))

@@ -29,7 +29,7 @@ class OrderingService {
     List<DishView> menu() {
         return menu.findAll(Sort.by("id")).stream()
                 .map(item -> new DishView(item.id, item.name, item.category, item.description,
-                        item.icon, item.price, item.available))
+                        item.icon, item.price, item.available, item.imagePath, item.recipe))
                 .toList();
     }
 
@@ -80,7 +80,7 @@ class OrderingService {
     }
 
     record DishView(long id, String name, String category, String description, String icon,
-                    BigDecimal price, boolean available) {}
+                    BigDecimal price, boolean available, String imagePath, MenuItem.Recipe recipe) {}
 
     record LineView(long dishId, String name, BigDecimal unitPrice, int quantity) {}
 
