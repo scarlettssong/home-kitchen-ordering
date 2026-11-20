@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.security.Principal;
 import java.util.List;
 
 @RestController
@@ -23,8 +24,11 @@ import java.util.List;
 class OrderingController {
     private final OrderingService service;
 
-    OrderingController(OrderingService service) {
+    private final AccountService accounts;
+
+    OrderingController(OrderingService service, AccountService accounts) {
         this.service = service;
+        this.accounts = accounts;
     }
 
     @GetMapping("/dishes")
@@ -33,19 +37,19 @@ class OrderingController {
     }
 
     @PostMapping("/orders")
-    ResponseEntity<OrderingService.OrderView> placeOrder(@Valid @RequestBody OrderRequest request) {
-        var order = service.placeOrder(request.items());
+    ResponseEntity<OrderingService.OrderView> placeOrder(Principal principal, @Valid @RequestBody OrderRequest request) {
+        var order = service.placeOrder(accounts.account(principal.getName()), request.items());
         return ResponseEntity.created(URI.create("/api/orders/" + order.id())).body(order);
     }
 
     @GetMapping("/orders")
-    List<OrderingService.OrderView> orders() {
-        return service.orders();
+    List<OrderingService.OrderView> orders(Principal principal) {
+        return service.orders(accounts.account(principal.getName()));
     }
 
     @GetMapping("/orders/{id}")
-    OrderingService.OrderView order(@PathVariable long id) {
-        return service.order(id);
+    OrderingService.OrderView order(Principal principal, @PathVariable long id) {
+        return service.order(accounts.account(principal.getName()), id);
     }
 
     @PatchMapping("/orders/{id}/status")

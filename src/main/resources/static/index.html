@@ -10,7 +10,7 @@
 <body>
     <div id="app-wrapper">
         <header class="header">
-            <img src="/images/kitchen-avatar.jpg" alt="">
+            <img id="kitchen-avatar" src="/api/kitchen/avatar" alt="">
             <h1>Scarlett和Cris的小厨房</h1>
         </header>
         <p id="notice" role="status" hidden></p>
@@ -45,15 +45,58 @@
 
         <main id="view-order" class="main-view order-view" hidden>
             <div class="view-heading">
-                <h2>厨房订单</h2>
+                <h2 id="order-title">我的订单</h2>
                 <button id="refresh-orders" class="secondary-btn" type="button">刷新</button>
             </div>
             <div id="order-history-list"></div>
         </main>
 
         <main id="view-profile" class="main-view profile-view" hidden>
-            <h2>我的</h2>
-            <p>个人中心将在下一阶段开放。</p>
+            <section id="unlogged-box" class="auth-box">
+                <span class="welcome-icon" aria-hidden="true">🍳</span>
+                <h2>欢迎光临小厨房</h2>
+                <div class="auth-choices" aria-label="登录入口">
+                    <button type="button" class="secondary-btn" data-auth="GUEST">访客登录</button>
+                    <button type="button" class="secondary-btn" data-auth="ADMIN">店长登录</button>
+                </div>
+                <form id="auth-form" class="form-fields">
+                    <label>用户名<input name="username" required autocomplete="username" maxlength="40"></label>
+                    <label id="register-nickname" hidden>昵称（选填）<input name="nickname" maxlength="60"></label>
+                    <label>密码<input name="password" type="password" required autocomplete="current-password" maxlength="72"></label>
+                    <button id="auth-submit" class="primary-btn">访客登录</button>
+                    <button id="toggle-register" type="button" class="secondary-btn">新食客注册</button>
+                </form>
+            </section>
+            <section id="logged-box" class="profile-panel" hidden>
+                <div class="profile-header-area">
+                    <span class="profile-avatar" aria-hidden="true">👤</span>
+                    <div>
+                        <h2 id="profile-nickname"></h2>
+                        <p id="profile-role"></p>
+                        <p id="profile-username"></p>
+                    </div>
+                </div>
+                <details class="profile-card">
+                    <summary>编辑昵称</summary>
+                    <form id="nickname-form" class="form-fields">
+                        <label>新昵称<input name="nickname" required maxlength="60"></label>
+                        <button class="primary-btn">保存昵称</button>
+                    </form>
+                </details>
+                <section class="profile-card">
+                    <h3>❤️ 我的收藏</h3>
+                    <ul id="favorites-list"></ul>
+                </section>
+                <section id="avatar-settings" class="profile-card" hidden>
+                    <h3>厨房头像</h3>
+                    <form id="avatar-form" class="form-fields">
+                        <label>选择头像（JPEG 或 PNG，最多 1 MB）<input name="image" type="file" accept="image/jpeg,image/png" required></label>
+                        <button class="primary-btn">保存头像</button>
+                    </form>
+                    <button id="reset-avatar" type="button" class="secondary-btn">恢复默认头像</button>
+                </section>
+                <button id="logout" type="button" class="secondary-btn logout-button">退出登录</button>
+            </section>
         </main>
 
         <nav class="bottom-nav" aria-label="主导航">
@@ -71,10 +114,16 @@
 
     <dialog class="modal-content" id="dish-modal" aria-labelledby="modal-title">
         <button class="close-icon" type="button" aria-label="关闭菜谱" autofocus>×</button>
-        <div class="modal-scroll" tabindex="0" aria-label="菜谱内容">
+        <div class="modal-scroll" id="recipe-view" tabindex="0" aria-label="菜谱内容">
             <img class="modal-img" id="modal-img" alt="">
             <div class="modal-body">
-                <h2 id="modal-title"></h2>
+                <div class="recipe-heading">
+                    <h2 id="modal-title"></h2>
+                    <div class="recipe-actions">
+                        <button id="favorite-dish" type="button" class="secondary-btn" hidden></button>
+                        <button id="edit-dish" type="button" class="secondary-btn" hidden>编辑菜谱</button>
+                    </div>
+                </div>
                 <p id="modal-price" class="dish-price"></p>
                 <p id="modal-description"></p>
                 <section class="modal-section" aria-labelledby="ingredients-title">
@@ -91,8 +140,40 @@
                 </section>
             </div>
         </div>
-        <form class="modal-footer" method="dialog">
+        <form class="modal-footer" id="recipe-footer" method="dialog">
             <button class="primary-btn">返回菜单</button>
+        </form>
+        <form id="dish-editor" hidden>
+            <div class="modal-scroll editor-scroll">
+                <h2 id="editor-title">编辑菜谱</h2>
+                <p id="editor-error" class="form-error" role="status" hidden></p>
+                <div class="form-fields">
+                    <label>菜名<input name="name" required maxlength="120"></label>
+                    <label>菜系<select name="category">
+                        <option value="Chinese">中餐</option><option value="Western">西餐</option>
+                        <option value="Japanese">日料</option><option value="Dessert">甜品</option>
+                    </select></label>
+                    <label>价格（USD）<input name="price" type="number" min="0" max="99999999.99" step="0.01" required></label>
+                    <label>菜品介绍（选填）<textarea name="description" rows="2" maxlength="240"></textarea></label>
+                    <label class="checkbox-row"><input name="available" type="checkbox">可点餐</label>
+                    <label>菜品照片（JPEG 或 PNG，最多 1 MB）<input name="photo" type="file" accept="image/jpeg,image/png"></label>
+                    <img id="editor-photo" alt="菜品照片预览" hidden>
+                    <button id="remove-photo" type="button" class="secondary-btn" hidden>移除图片</button>
+                    <fieldset><legend>原料与用量</legend>
+                        <div id="editable-ingredients"></div>
+                        <button id="add-ingredient" type="button" class="secondary-btn">添加原料</button>
+                    </fieldset>
+                    <fieldset><legend>制作步骤</legend>
+                        <ol id="editable-steps"></ol>
+                        <button id="add-step" type="button" class="secondary-btn">添加步骤</button>
+                    </fieldset>
+                    <label>Tips（选填）<textarea name="tips" rows="3" maxlength="4000"></textarea></label>
+                </div>
+            </div>
+            <div class="modal-footer editor-footer">
+                <button id="delete-dish" type="button" class="secondary-btn danger" hidden>删除菜品</button>
+                <button class="primary-btn">保存菜品</button>
+            </div>
         </form>
     </dialog>
 </body>

@@ -34,7 +34,7 @@ class OrderingService {
     }
 
     @Transactional
-    OrderView placeOrder(List<OrderingController.LineRequest> items) {
+    OrderView placeOrder(KitchenAccount account, List<OrderingController.LineRequest> items) {
         Map<Long, Integer> quantities = new LinkedHashMap<>();
         for (var item : items) {
             if (quantities.putIfAbsent(item.dishId(), item.quantity()) != null) {
@@ -53,15 +53,21 @@ class OrderingService {
             }
             lines.add(new KitchenOrder.Line(dish, entry.getValue()));
         }
-        return OrderView.from(orders.save(new KitchenOrder(lines)));
+        return OrderView.from(orders.save(new KitchenOrder(account.id, lines)));
     }
 
-    List<OrderView> orders() {
-        return orders.findAllByOrderByIdDesc().stream().map(OrderView::from).toList();
+    List<OrderView> orders(KitchenAccount account) {
+        var visible = account.role == KitchenAccount.Role.ADMIN
+                ? orders.findAllByOrderByIdDesc()
+                : orders.findAllByAccountIdOrderByIdDesc(account.id);
+        return visible.stream().map(OrderView::from).toList();
     }
 
-    OrderView order(long id) {
-        return OrderView.from(orders.findById(id).orElseThrow(OrderingService::orderNotFound));
+    OrderView order(KitchenAccount account, long id) {
+        var visible = account.role == KitchenAccount.Role.ADMIN
+                ? orders.findById(id)
+                : orders.findByIdAndAccountId(id, account.id);
+        return OrderView.from(visible.orElseThrow(OrderingService::orderNotFound));
     }
 
     @Transactional

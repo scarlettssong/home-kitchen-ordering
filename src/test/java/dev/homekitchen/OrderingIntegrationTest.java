@@ -2,15 +2,23 @@ package dev.homekitchen;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -29,6 +37,18 @@ class OrderingIntegrationTest {
     @Autowired ObjectMapper json;
     @Autowired JdbcTemplate jdbc;
     @Autowired EntityManager persistence;
+    @Autowired PasswordEncoder passwords;
+
+    @BeforeEach
+    void setupOrderGuest() {
+        // Authenticated principal is supplied by SecurityMockMvc in these ordering tests.
+        String hash = passwords.encode(UUID.randomUUID().toString());
+        jdbc.update("""
+                insert into kitchen_account (username, nickname, password_hash, role)
+                values ('order_guest', 'Order Fixture', ?, 'GUEST'),
+                       ('order_admin', 'Kitchen Fixture', ?, 'ADMIN')
+                """, hash, hash);
+    }
 
     @Test
     void menuShowsSyntheticDishesAndAvailability() throws Exception {
@@ -53,7 +73,7 @@ class OrderingIntegrationTest {
 
     @Test
     void enforcesThreePortionsPerDish() throws Exception {
-        mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(guestOrder().contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"items":[{"dishId":1,"quantity":3},{"dishId":2,"quantity":3}]}
                                 """))
@@ -66,7 +86,7 @@ class OrderingIntegrationTest {
                 "[{\"dishId\":1,\"quantity\":4}]",
                 "[{\"dishId\":1,\"quantity\":2},{\"dishId\":1,\"quantity\":2}]"
         }) {
-            mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+            mvc.perform(guestOrder().contentType(MediaType.APPLICATION_JSON)
                             .content("{\"items\":" + items + "}"))
                     .andExpect(status().isBadRequest());
         }
@@ -79,14 +99,14 @@ class OrderingIntegrationTest {
         jdbc.update("update menu_item set name = ?, price = ? where id = 1", "Special Rice", 19.75);
         persistence.clear();
 
-        mvc.perform(get("/api/orders/{id}", id))
+        mvc.perform(get("/api/orders/{id}", id).with(guest()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].name").value("姜葱香米饭"))
                 .andExpect(jsonPath("$.items[0].unitPrice").value(8.50))
                 .andExpect(jsonPath("$.items[0].quantity").value(2))
                 .andExpect(jsonPath("$.total").value(17.00));
 
-        mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(guestOrder().contentType(MediaType.APPLICATION_JSON)
                         .content("{\"items\":[{\"dishId\":1,\"quantity\":2}]}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.items[0].name").value("Special Rice"))
@@ -103,7 +123,7 @@ class OrderingIntegrationTest {
         setStatus(id, "COMPLETED", 200);
         setStatus(id, "PREPARING", 409);
 
-        mvc.perform(get("/api/orders"))
+        mvc.perform(get("/api/orders").with(user("order_admin").roles("ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.id == " + id + ")].status").value("COMPLETED"));
     }
@@ -120,7 +140,7 @@ class OrderingIntegrationTest {
                 "[{\"dishId\":1,\"quantity\":\"2\"}]",
                 "[{\"dishId\":1,\"quantity\":2},{\"dishId\":1,\"quantity\":2}]"
         }) {
-            mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+            mvc.perform(guestOrder().contentType(MediaType.APPLICATION_JSON)
                             .content("{\"items\":" + items + "}"))
                     .andExpect(status().isBadRequest());
         }
@@ -129,14 +149,22 @@ class OrderingIntegrationTest {
     @Test
     void rejectsUnavailableAndUnknownDishes() throws Exception {
         for (int dishId : new int[]{6, 9999}) {
-            mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+            mvc.perform(guestOrder().contentType(MediaType.APPLICATION_JSON)
                             .content("{\"items\":[{\"dishId\":" + dishId + ",\"quantity\":1}]}"))
                     .andExpect(status().isConflict());
         }
     }
 
+    private MockHttpServletRequestBuilder guestOrder() {
+        return post("/api/orders").with(guest()).with(csrf());
+    }
+
+    private RequestPostProcessor guest() {
+        return user("order_guest").roles("GUEST");
+    }
+
     private long placeOrder() throws Exception {
-        var result = mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        var result = mvc.perform(guestOrder().contentType(MediaType.APPLICATION_JSON)
                         .content("{\"items\":[{\"dishId\":1,\"quantity\":2,\"unitPrice\":0.01}],\"total\":0.02}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("PLACED"))
@@ -146,7 +174,8 @@ class OrderingIntegrationTest {
     }
 
     private void setStatus(long id, String value, int expectedStatus) throws Exception {
-        mvc.perform(patch("/api/orders/{id}/status", id).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(patch("/api/orders/{id}/status", id).with(user("order_admin").roles("ADMIN")).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"" + value + "\"}"))
                 .andExpect(status().is(expectedStatus));
     }

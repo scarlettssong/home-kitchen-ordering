@@ -38,6 +38,7 @@ class KitchenOrder {
     @Enumerated(EnumType.STRING)
     Status status;
 
+    Long accountId;
     BigDecimal total;
     Instant createdAt;
 
@@ -48,7 +49,8 @@ class KitchenOrder {
 
     protected KitchenOrder() {}
 
-    KitchenOrder(List<Line> items) {
+    KitchenOrder(long accountId, List<Line> items) {
+        this.accountId = accountId;
         this.status = Status.PLACED;
         this.createdAt = Instant.now();
         this.items.addAll(items);
@@ -86,6 +88,11 @@ class KitchenOrder {
 interface OrderRepository extends JpaRepository<KitchenOrder, Long> {
     @EntityGraph(attributePaths = "items")
     List<KitchenOrder> findAllByOrderByIdDesc();
+
+    @EntityGraph(attributePaths = "items")
+    List<KitchenOrder> findAllByAccountIdOrderByIdDesc(long accountId);
+
+    Optional<KitchenOrder> findByIdAndAccountId(long id, long accountId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from KitchenOrder o where o.id = :id")

@@ -13,6 +13,12 @@ const nextStatus = { PLACED: 'PREPARING', PREPARING: 'COMPLETED' };
 let dishes = [];
 let currentCategory = 'Chinese';
 let submitting = false;
+let session;
+let recipeDish;
+let authMode = 'GUEST';
+let returnToCart = false;
+
+const isAdmin = () => session?.user?.role === 'ADMIN';
 
 function element(tag, className, content) {
     const node = document.createElement(tag);
@@ -28,13 +34,26 @@ function button(className, text, onClick) {
     return node;
 }
 
-async function request(path, options) {
-    const response = await fetch(path, options);
+async function request(path, options = {}) {
+    const headers = new Headers(options.headers);
+    if (options.method && options.method !== 'GET' && session?.csrfToken) {
+        headers.set(session.csrfHeader, session.csrfToken);
+    }
+    const response = await fetch(path, { ...options, headers });
     if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.detail ?? '请求失败，请稍后重试。');
+        const hints = { 401: '请检查登录信息或重新登录。', 403: '没有权限执行此操作。', 413: '图片不能超过 1 MB。' };
+        throw new Error(hints[response.status] ?? error.detail ?? '请求失败，请稍后重试。');
     }
-    return response.json();
+    return response.headers.get('content-type')?.includes('application/json') ? response.json() : null;
+}
+
+function sendJson(path, method, data) {
+    return request(path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
 }
 
 function showNotice(message = '', error = false) {
@@ -107,10 +126,17 @@ function renderCategory() {
         if (dish.available) card.append(quantityControls(dish, cart.get(dish.id) ?? 0));
         list.append(card);
     }
-    if (!list.hasChildNodes()) list.textContent = '这个菜系暂时没有菜品。';
+    if (!list.hasChildNodes()) list.append(element('p', 'empty', '这个菜系暂时没有菜品。'));
+    if (isAdmin()) list.append(button('add-dish', '＋ 添加新菜品', () => openEditor()));
 }
 
 function openDishDetails(dish) {
+    recipeDish = dish;
+    byId('dish-editor').hidden = true;
+    byId('recipe-view').hidden = false;
+    byId('recipe-footer').hidden = false;
+    dialog.setAttribute('aria-labelledby', 'modal-title');
+    renderRecipeActions();
     const photo = byId('modal-img');
     photo.src = dish.imagePath ?? '/images/kitchen-avatar.jpg';
     photo.alt = dish.imagePath ? dish.name : '';
@@ -128,8 +154,8 @@ function openDishDetails(dish) {
     byId('modal-steps').replaceChildren(...recipe.steps.map(step => element('li', 'read-s-row', step)));
     byId('modal-tips').textContent = recipe.tips ?? '';
     byId('modal-tips-area').hidden = !recipe.tips;
-    dialog.showModal();
-    dialog.querySelector('.modal-scroll').scrollTop = 0;
+    if (!dialog.open) dialog.showModal();
+    byId('recipe-view').scrollTop = 0;
 }
 
 function renderCart() {
@@ -162,10 +188,17 @@ async function loadDishesFromServer() {
     }
     renderCategory();
     renderCart();
+    renderProfile();
 }
 
 async function placeOrder() {
     if (submitting || !cart.size) return;
+    if (!session?.user) {
+        returnToCart = true;
+        switchTab('view-profile');
+        showNotice('请先登录，购物车会保留。');
+        return;
+    }
     submitting = true;
     renderCategory();
     renderCart();
@@ -208,7 +241,7 @@ function orderCard(order) {
     actions.append(element('strong', '', `合计 ${money.format(order.total)}`));
 
     const target = nextStatus[order.status];
-    if (target) {
+    if (target && isAdmin()) {
         const change = button('primary-btn', target === 'PREPARING' ? '开始制作' : '标记完成',
             async () => {
                 change.disabled = true;
@@ -235,12 +268,23 @@ function orderCard(order) {
 
 async function renderOrders() {
     const list = byId('order-history-list');
+    const viewer = session?.user?.username;
     const orders = await request('/api/orders');
+    if (viewer !== session?.user?.username) return;
     list.replaceChildren(...orders.map(orderCard));
     if (!orders.length) list.append(element('p', 'empty', '暂无订单。'));
 }
 
 function refreshOrders() {
+    const list = byId('order-history-list');
+    list.replaceChildren();
+    byId('refresh-orders').hidden = !session?.user;
+    byId('order-title').textContent = isAdmin() ? '厨房订单' : '我的订单';
+    if (!session?.user) {
+        list.append(element('p', 'empty', '登录后可查看自己的订单。'));
+        list.append(button('secondary-btn', '前往登录', () => switchTab('view-profile')));
+        return;
+    }
     renderOrders().catch(error => showNotice(error.message, true));
 }
 
@@ -254,20 +298,12 @@ function switchTab(activeView) {
     }
     if (activeView === 'view-cart') renderCart();
     if (activeView === 'view-order') refreshOrders();
+    if (activeView === 'view-profile') renderProfile();
 }
 
 for (const category of categories) {
     category.setAttribute('aria-pressed', String(category.classList.contains('active')));
-    category.addEventListener('click', () => {
-        currentCategory = category.dataset.category;
-        for (const item of categories) {
-            const active = item === category;
-            item.classList.toggle('active', active);
-            item.setAttribute('aria-pressed', String(active));
-        }
-        renderCategory();
-        document.querySelector('.dish-list').scrollTop = 0;
-    });
+    category.addEventListener('click', () => activateCategory(category.dataset.category));
 }
 for (const tab of tabs) tab.addEventListener('click', () => switchTab(tab.dataset.view));
 byId('cart-fab').addEventListener('click', () => {
@@ -283,9 +319,368 @@ dialog.addEventListener('click', event => {
     if (event.target === dialog) dialog.close();
 });
 byId('place-order').addEventListener('click', placeOrder);
+
+function setAuthMode(mode) {
+    authMode = mode;
+    const isRegistering = mode === 'REGISTER';
+    byId('register-nickname').hidden = !isRegistering;
+    byId('toggle-register').hidden = mode === 'ADMIN';
+    byId('toggle-register').textContent = isRegistering ? '返回访客登录' : '新食客注册';
+    byId('auth-submit').textContent = isRegistering ? '注册并登录' : mode === 'ADMIN' ? '店长登录' : '访客登录';
+    byId('auth-form').elements.password.autocomplete = isRegistering ? 'new-password' : 'current-password';
+    for (const choice of document.querySelectorAll('[data-auth]')) {
+        choice.setAttribute('aria-pressed', String(choice.dataset.auth === (isRegistering ? 'GUEST' : mode)));
+    }
+}
+
+async function loadSession() {
+    session = await request('/api/session');
+    renderCategory();
+    renderProfile();
+}
+
+function renderProfile() {
+    const account = session?.user;
+    byId('unlogged-box').hidden = Boolean(account);
+    byId('logged-box').hidden = !account;
+    if (!account) return;
+
+    byId('profile-nickname').textContent = account.nickname;
+    byId('profile-username').textContent = account.username;
+    byId('profile-role').textContent = isAdmin() ? '店长' : '尊贵食客';
+    byId('avatar-settings').hidden = !isAdmin();
+    const favorites = dishes.filter(dish => account.favorites.includes(dish.id));
+    byId('favorites-list').replaceChildren(...favorites.map(dish => {
+        const item = element('li', '');
+        item.append(button('secondary-btn', dish.name, () => openDishDetails(dish)));
+        return item;
+    }));
+    if (!favorites.length) byId('favorites-list').append(element('li', 'empty', '暂无收藏菜品。'));
+}
+
+async function submitAuth(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const mode = authMode;
+    const fields = new FormData(form);
+    const username = String(fields.get('username')).trim();
+    const password = String(fields.get('password'));
+    const submit = byId('auth-submit');
+    submit.disabled = true;
+    showNotice();
+    try {
+        if (!session) await loadSession();
+        if (mode === 'REGISTER') {
+            await sendJson('/api/register', 'POST', { username, password, nickname: fields.get('nickname') });
+        }
+        await request('/api/login', { method: 'POST', body: new URLSearchParams({ username, password }) });
+        await loadSession();
+        if (session.user.role !== (mode === 'ADMIN' ? 'ADMIN' : 'GUEST')) {
+            await request('/api/logout', { method: 'POST' });
+            await loadSession();
+            throw new Error('请使用与你账号身份对应的登录入口。');
+        }
+        form.reset();
+        showNotice(`欢迎，${session.user.nickname}。`);
+        if (returnToCart) {
+            returnToCart = false;
+            switchTab('view-cart');
+            byId('place-order').focus();
+        }
+    } catch (error) {
+        showNotice(error.message, true);
+    } finally {
+        form.elements.password.value = '';
+        submit.disabled = false;
+    }
+}
+
+async function logout() {
+    try {
+        await request('/api/logout', { method: 'POST' });
+        cart.clear();
+        byId('order-history-list').replaceChildren();
+        await loadSession();
+        renderCart();
+        setAuthMode('GUEST');
+        showNotice('已退出登录。');
+    } catch (error) {
+        showNotice(error.message, true);
+    }
+}
+
+async function saveNickname(event) {
+    event.preventDefault();
+    try {
+        const form = event.currentTarget;
+        session.user = await sendJson('/api/profile', 'PATCH', { nickname: form.elements.nickname.value });
+        form.reset();
+        form.closest('details').open = false;
+        renderProfile();
+        showNotice('已保存昵称。');
+    } catch (error) {
+        showNotice(error.message, true);
+    }
+}
+
+function renderRecipeActions() {
+    const favorite = byId('favorite-dish');
+    const selected = session?.user?.favorites.includes(recipeDish.id);
+    favorite.hidden = !session?.user;
+    favorite.textContent = selected ? '♥ 已收藏' : '♡ 收藏';
+    favorite.setAttribute('aria-pressed', String(Boolean(selected)));
+    byId('edit-dish').hidden = !isAdmin();
+}
+
+async function toggleFavorite() {
+    const control = byId('favorite-dish');
+    const selected = session.user.favorites.includes(recipeDish.id);
+    control.disabled = true;
+    try {
+        await request(`/api/favorites/${recipeDish.id}`, { method: selected ? 'DELETE' : 'PUT' });
+        await loadSession();
+        renderRecipeActions();
+    } catch (error) {
+        showNotice(error.message, true);
+    } finally {
+        control.disabled = false;
+    }
+}
+
+function refreshAvatar() {
+    byId('kitchen-avatar').src = `/api/kitchen/avatar?v=${Date.now()}`;
+}
+
+async function saveAvatar(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const image = form.elements.image.files[0];
+    try {
+        validatePhoto(image);
+        await request('/api/admin/avatar', { method: 'PUT', body: new FormData(form) });
+        form.reset();
+        refreshAvatar();
+        showNotice('厨房头像已更新。');
+    } catch (error) {
+        showNotice(error.message, true);
+    }
+}
+
+async function resetAvatar() {
+    try {
+        await request('/api/admin/avatar', { method: 'DELETE' });
+        refreshAvatar();
+        showNotice('已恢复默认头像。');
+    } catch (error) {
+        showNotice(error.message, true);
+    }
+}
+
+const editor = byId('dish-editor');
+let editingId;
+let removePhoto = false;
+let previewUrl;
+
+function editorError(message = '') {
+    const error = byId('editor-error');
+    error.textContent = message;
+    error.hidden = !message;
+    if (message) editor.querySelector('.editor-scroll').scrollTop = 0;
+}
+
+function showPhotoPreview(url) {
+    const photo = byId('editor-photo');
+    if (url) photo.src = url;
+    else photo.removeAttribute('src');
+    photo.hidden = !url;
+    byId('remove-photo').hidden = !url;
+}
+
+function clearPreviewUrl() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+}
+
+function openEditor(dish) {
+    editingId = dish?.id;
+    removePhoto = false;
+    clearPreviewUrl();
+    editor.reset();
+    editorError();
+    editor.elements.name.value = dish?.name ?? '';
+    editor.elements.category.value = dish?.category ?? currentCategory;
+    editor.elements.price.value = dish?.price ?? '';
+    editor.elements.description.value = dish?.description ?? '';
+    editor.elements.available.checked = dish?.available ?? true;
+    editor.elements.tips.value = dish?.recipe.tips ?? '';
+    showPhotoPreview(dish?.imagePath);
+
+    byId('editable-ingredients').replaceChildren();
+    byId('editable-steps').replaceChildren();
+    for (const ingredient of dish?.recipe.ingredients ?? []) addIngredient(ingredient);
+    for (const step of dish?.recipe.steps ?? []) addStep(step);
+    byId('editor-title').textContent = dish ? '编辑菜谱' : '添加新菜品';
+    byId('delete-dish').hidden = !dish;
+    byId('recipe-view').hidden = true;
+    byId('recipe-footer').hidden = true;
+    editor.hidden = false;
+    dialog.setAttribute('aria-labelledby', 'editor-title');
+    if (!dialog.open) dialog.showModal();
+    editor.querySelector('.editor-scroll').scrollTop = 0;
+    editor.elements.name.focus();
+}
+
+function textField(label, value, maxLength) {
+    const input = element('input', '');
+    input.setAttribute('aria-label', label);
+    input.placeholder = label;
+    input.maxLength = maxLength;
+    input.value = value;
+    return input;
+}
+
+function addIngredient(ingredient = { name: '', amount: '' }) {
+    const row = element('div', 'ingredient-edit');
+    const name = textField('原料名称', ingredient.name, 120);
+    const amount = textField('用量', ingredient.amount, 80);
+    row.append(name, amount, button('secondary-btn row-remove', '移除', () => row.remove()));
+    byId('editable-ingredients').append(row);
+    return name;
+}
+
+function addStep(step = '') {
+    const item = element('li', 'step-edit');
+    const row = element('div', 'step-fields');
+    const input = element('textarea', '');
+    input.setAttribute('aria-label', '步骤内容');
+    input.placeholder = '步骤内容';
+    input.maxLength = 2000;
+    input.rows = 2;
+    input.value = step;
+    row.append(input, button('secondary-btn row-remove', '移除', () => item.remove()));
+    item.append(row);
+    byId('editable-steps').append(item);
+    return input;
+}
+
+function validatePhoto(photo) {
+    if (photo.size > 1024 * 1024) throw new Error('图片不能超过 1 MB。');
+    if (!['image/jpeg', 'image/png'].includes(photo.type)) throw new Error('请选择 JPEG 或 PNG 图片。');
+}
+
+function selectDishPhoto(event) {
+    const field = event.currentTarget;
+    if (!field.files.length) return;
+    try {
+        validatePhoto(field.files[0]);
+        clearPreviewUrl();
+        previewUrl = URL.createObjectURL(field.files[0]);
+        showPhotoPreview(previewUrl);
+        removePhoto = false;
+        editorError();
+    } catch (error) {
+        field.value = '';
+        clearPreviewUrl();
+        showPhotoPreview(removePhoto ? null : dishes.find(dish => dish.id === editingId)?.imagePath);
+        editorError(error.message);
+    }
+}
+
+async function saveDish(event) {
+    event.preventDefault();
+    editorError();
+    const fields = editor.elements;
+    const ingredients = [...byId('editable-ingredients').children].map(row => {
+        const [name, amount] = row.querySelectorAll('input');
+        return { name: name.value.trim(), amount: amount.value.trim() };
+    });
+    if (ingredients.some(item => item.amount && !item.name)) {
+        editorError('请填写有用量的原料名称。');
+        return;
+    }
+    const steps = [...byId('editable-steps').querySelectorAll('textarea')]
+        .map(input => input.value.trim()).filter(Boolean);
+    const data = {
+        name: fields.name.value.trim(), category: fields.category.value, price: Number(fields.price.value),
+        description: fields.description.value.trim(), available: fields.available.checked,
+        ingredients: ingredients.filter(item => item.name), steps, tips: fields.tips.value.trim(),
+        removeImage: removePhoto
+    };
+    if (!data.name) {
+        editorError('请输入菜名。');
+        return;
+    }
+    const payload = new FormData();
+    payload.append('dish', new Blob([JSON.stringify(data)], { type: 'application/json' }));
+    if (fields.photo.files.length) payload.append('image', fields.photo.files[0]);
+
+    const save = editor.querySelector('button[type="submit"], .editor-footer .primary-btn');
+    save.disabled = true;
+    try {
+        await request(editingId ? `/api/admin/dishes/${editingId}` : '/api/admin/dishes', {
+            method: editingId ? 'PUT' : 'POST', body: payload
+        });
+        dialog.close();
+        activateCategory(data.category);
+        await loadDishesFromServer();
+        showNotice('菜品已保存。');
+    } catch (error) {
+        if (dialog.open) editorError(error.message);
+        else showNotice(error.message, true);
+    } finally {
+        save.disabled = false;
+    }
+}
+
+async function deleteDish() {
+    if (!window.confirm('删除这道菜？已下单的订单会保留原菜名与价格。')) return;
+    try {
+        await request(`/api/admin/dishes/${editingId}`, { method: 'DELETE' });
+        dialog.close();
+        await loadDishesFromServer();
+        showNotice('菜品已删除。');
+    } catch (error) {
+        if (dialog.open) editorError(error.message);
+        else showNotice(error.message, true);
+    }
+}
+
+function activateCategory(category) {
+    currentCategory = category;
+    for (const item of categories) {
+        const active = item.dataset.category === category;
+        item.classList.toggle('active', active);
+        item.setAttribute('aria-pressed', String(active));
+    }
+    renderCategory();
+    document.querySelector('.dish-list').scrollTop = 0;
+}
+
 byId('refresh-orders').addEventListener('click', refreshOrders);
-renderCart();
-loadDishesFromServer().catch(error => {
-    byId('full-dish-list').textContent = '暂时无法加载菜单。';
-    showNotice(error.message, true);
+for (const choice of document.querySelectorAll('[data-auth]')) {
+    choice.addEventListener('click', () => setAuthMode(choice.dataset.auth));
+}
+byId('toggle-register').addEventListener('click', () => setAuthMode(authMode === 'REGISTER' ? 'GUEST' : 'REGISTER'));
+byId('auth-form').addEventListener('submit', submitAuth);
+byId('logout').addEventListener('click', logout);
+byId('nickname-form').addEventListener('submit', saveNickname);
+byId('favorite-dish').addEventListener('click', toggleFavorite);
+byId('avatar-form').addEventListener('submit', saveAvatar);
+byId('reset-avatar').addEventListener('click', resetAvatar);
+byId('edit-dish').addEventListener('click', () => openEditor(recipeDish));
+byId('add-ingredient').addEventListener('click', () => addIngredient().focus());
+byId('add-step').addEventListener('click', () => addStep().focus());
+editor.elements.photo.addEventListener('change', selectDishPhoto);
+byId('remove-photo').addEventListener('click', () => {
+    editor.elements.photo.value = '';
+    clearPreviewUrl();
+    removePhoto = true;
+    showPhotoPreview(null);
 });
+byId('delete-dish').addEventListener('click', deleteDish);
+editor.addEventListener('submit', saveDish);
+dialog.addEventListener('close', clearPreviewUrl);
+
+setAuthMode('GUEST');
+renderCart();
+Promise.all([loadSession(), loadDishesFromServer()]).catch(error => showNotice(error.message, true));

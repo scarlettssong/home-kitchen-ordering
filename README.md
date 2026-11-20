@@ -24,16 +24,46 @@ export DB_PASSWORD='<password chosen at the prompt>'
 mvn spring-boot:run
 ```
 
-Open [http://127.0.0.1:8080](http://127.0.0.1:8080). The demo binds to loopback by default. The menu, recipe viewer, cart, and kitchen order flow work without accounts in this local demo. The 我的 tab is reserved for the account features in the next phase.
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080). The app binds to loopback by default.
+
+## Local accounts
+
+Use **我的 → 新食客注册** to create a guest. Guests can browse without signing in and use **访客登录** to place orders, view their own order history, edit their nickname, and manage favorites.
+
+To create a local manager, set the following environment variables before starting the app. Choose a new password when prompted.
+
+```sh
+export KITCHEN_ADMIN_USERNAME=local_manager
+printf 'New local manager password: '
+read -rs KITCHEN_ADMIN_PASSWORD
+printf '\n'
+export KITCHEN_ADMIN_PASSWORD
+mvn spring-boot:run
+```
+
+The first startup with these variables creates the manager with a BCrypt password hash. Later startups keep that account's existing password. The manager uses **我的 → 店长登录**, can manage the kitchen avatar and dishes, and sees all orders. Registration always creates a guest.
 
 ## Demo walkthrough
 
-1. In **点餐**, browse the four cuisine categories. Open **姜葱香米饭** to view its photo, ingredient amounts, numbered steps, and Tips. Scroll to the end and use **返回菜单** to close the recipe.
-2. Add two **姜葱香米饭** and one **芝麻蔬菜煎饺**. Open the floating cart, confirm the **$24.25** estimate, and click **确认下单**. The confirmation shows the order number and the total returned by the backend.
-3. Open **订单** and find the order marked **已下单**. Click **开始制作**, then click **标记完成** when the order shows **制作中**.
-4. Use **刷新** to verify that the same order still shows **已完成**, with its saved items and total.
+1. In **点餐**, open **姜葱香米饭** to view its photo, ingredients, numbered steps, and Tips.
+2. Sign in as a guest. Add two **姜葱香米饭** and one **芝麻蔬菜煎饺**. Open the floating cart, confirm the **$24.25** estimate, and click **确认下单**. Look up the resulting order in **订单**.
+3. In a separate browser session, sign in as the manager and open **订单**. Click **开始制作** and then **标记完成** on the same order.
+4. In **点餐**, the manager can use **添加新菜品** or open a recipe and choose **编辑菜谱**. JPEG and PNG uploads allow a preview and removal, with a 1 MB upload limit.
 
 [Desktop menu](docs/screenshots/restored-desktop-menu.png) · [Mobile menu](docs/screenshots/restored-mobile-menu.png) · [Mobile recipe at the final step and Tips](docs/screenshots/restored-mobile-recipe-end.png)
+
+## Import a legacy menu locally
+
+Create a separate local PostgreSQL database and start the Java app against it once so Flyway applies the schema. Use the same database URL for the import. Keep the legacy database and imported image data outside the repository.
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install 'psycopg[binary]'
+export LEGACY_IMPORT_DB_URL=jdbc:postgresql://127.0.0.1:5432/home_kitchen_legacy
+.venv/bin/python tools/import_legacy_menu.py /path/to/legacy/kitchen.db
+```
+
+The script uses `DB_USER` and `DB_PASSWORD` from the shell, reads the SQLite `dish` table in read-only mode, and accepts a loopback PostgreSQL destination. It uses a stable category and dish-name key so reruns leave the imported records and subsequent edits intact. The script reports import counts and missing fields. A fresh application database includes the synthetic menu and creates no guest accounts.
 
 ## Test with PostgreSQL
 
@@ -43,10 +73,10 @@ Use the separate database created above. The suite applies the Flyway migrations
 export TEST_DB_URL=jdbc:postgresql://localhost:5432/home_kitchen_test
 export TEST_DB_USER=home_kitchen
 export TEST_DB_PASSWORD='<password chosen at the prompt>'
-mvn test
+mvn verify
 ```
 
-The integration tests exercise the HTTP endpoints against PostgreSQL. They cover menu availability and recipe data, the three-portion limit, invalid quantities, duplicate lines, unavailable dishes, order totals after menu changes, and the forward-only kitchen workflow.
+The integration tests exercise the HTTP endpoints against PostgreSQL. They cover session login and logout, CSRF, guest and manager permissions, private order history, menu changes and deletion, image limits, nickname and favorites, the three-portion limit, and price snapshots.
 
 ## Ordering rules
 
