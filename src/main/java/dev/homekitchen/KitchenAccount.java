@@ -7,6 +7,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -35,5 +37,9 @@ class KitchenAccount {
 }
 
 interface AccountRepository extends JpaRepository<KitchenAccount, Long> {
-    Optional<KitchenAccount> findByUsername(String username);
+    @Query(value = """
+            select * from kitchen_account
+            where lower(username collate "C") = lower(:username collate "C")
+            """, nativeQuery = true)
+    Optional<KitchenAccount> findByLoginName(@Param("username") String username);
 }

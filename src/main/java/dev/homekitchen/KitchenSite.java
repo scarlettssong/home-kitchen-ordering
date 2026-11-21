@@ -16,7 +16,7 @@ class KitchenSite {
             default -> throw new IllegalArgumentException("KITCHEN_MODE must be public, private, or shared-menu");
         };
         this.language = switch (language) {
-            case "" -> registrationOpen() ? "en-US" : "zh-CN";
+            case "" -> this.mode == Mode.PORTFOLIO ? "en-US" : "zh-CN";
             case "zh-CN", "en-US" -> language;
             default -> throw new IllegalArgumentException("KITCHEN_LANGUAGE must be zh-CN or en-US");
         };
@@ -27,6 +27,10 @@ class KitchenSite {
     }
 
     boolean registrationOpen() {
+        return mode != Mode.PRIVATE;
+    }
+
+    boolean publicAvatar() {
         return mode == Mode.PORTFOLIO;
     }
 

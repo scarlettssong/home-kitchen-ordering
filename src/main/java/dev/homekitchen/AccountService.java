@@ -17,7 +17,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Locale;
 
 @Service
 class AccountService implements UserDetailsService {
@@ -35,18 +34,18 @@ class AccountService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) {
-        var account = accounts.findByUsername(normalize(username))
+        var account = accounts.findByLoginName(username.strip())
                 .orElseThrow(() -> new UsernameNotFoundException("Account not found"));
         return User.withUsername(account.username).password(account.passwordHash)
                 .roles(account.role.name()).build();
     }
 
     KitchenAccount account(String username) {
-        return accounts.findByUsername(username).orElseThrow();
+        return accounts.findByLoginName(username).orElseThrow();
     }
 
     void register(String username, String nickname, String password) {
-        String name = normalize(username);
+        String name = username.strip();
         var account = new KitchenAccount(name, nickname == null || nickname.isBlank() ? name : nickname.strip(),
                 passwordHash(password), KitchenAccount.Role.GUEST);
         try {
@@ -102,14 +101,14 @@ class AccountService implements UserDetailsService {
 
     private void provision(String username, String password, KitchenAccount.Role role, String nickname) {
         if (username.isBlank() && password.isEmpty()) return;
-        String name = normalize(username);
-        if (!name.matches("[a-z0-9][a-z0-9_.-]{2,39}")) {
+        String name = username.strip();
+        if (!name.matches("[a-zA-Z0-9][a-zA-Z0-9_.-]{2,39}")) {
             throw new IllegalArgumentException("Use a valid username for the " + role + " account");
         }
         jdbc.update("""
                 insert into kitchen_account (username, nickname, password_hash, role)
                 values (?, ?, ?, ?)
-                on conflict (username) do nothing
+                on conflict do nothing
                 """, name, nickname, passwordHash(password), role.name());
         if (account(name).role != role) {
             throw new IllegalStateException("The configured username already belongs to a different role");
@@ -122,10 +121,6 @@ class AccountService implements UserDetailsService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, site.text("密码需为 8 到 72 个 UTF-8 字节。", "Use a password between 8 and 72 UTF-8 bytes."));
         }
         return passwords.encode(password);
-    }
-
-    private static String normalize(String username) {
-        return username.strip().toLowerCase(Locale.ROOT);
     }
 
     record Profile(String username, String nickname, KitchenAccount.Role role, List<Long> favorites) {}

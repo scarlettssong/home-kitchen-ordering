@@ -28,12 +28,15 @@ class SecurityConfiguration {
                             "/api/session", "/healthz").permitAll()
                             .requestMatchers(HttpMethod.HEAD, "/healthz").permitAll();
                     if (site.registrationOpen()) {
-                        rules.requestMatchers(HttpMethod.POST, "/api/register").permitAll()
-                                .requestMatchers(HttpMethod.GET, "/api/kitchen/avatar").permitAll()
+                        rules.requestMatchers(HttpMethod.POST, "/api/register").permitAll();
+                    } else {
+                        rules.requestMatchers(HttpMethod.POST, "/api/register").denyAll();
+                    }
+                    if (site.publicAvatar()) {
+                        rules.requestMatchers(HttpMethod.GET, "/api/kitchen/avatar").permitAll()
                                 .requestMatchers(HttpMethod.HEAD, "/api/kitchen/avatar").permitAll();
                     } else {
-                        rules.requestMatchers(HttpMethod.POST, "/api/register").denyAll()
-                                .requestMatchers("/api/kitchen/avatar").authenticated();
+                        rules.requestMatchers("/api/kitchen/avatar").authenticated();
                     }
                     if (site.privateMode()) {
                         rules.requestMatchers("/api/dishes", "/api/dishes/**", "/images/**").authenticated();

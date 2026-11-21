@@ -25,6 +25,7 @@ class KitchenPage {
             case "language" -> site.language();
             case "privateMode" -> Boolean.toString(site.privateMode());
             case "registrationOpen" -> Boolean.toString(site.registrationOpen());
+            case "publicAvatar" -> Boolean.toString(site.publicAvatar());
             default -> messages.getString(match.group(1));
         }));
     }

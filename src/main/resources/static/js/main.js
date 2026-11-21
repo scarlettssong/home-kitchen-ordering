@@ -1,5 +1,6 @@
 const privateMode = document.documentElement.dataset.private === 'true';
 const registrationOpen = document.documentElement.dataset.registrationOpen === 'true';
+const publicAvatar = document.documentElement.dataset.publicAvatar === 'true';
 const language = document.documentElement.lang;
 const text = (chinese, english) => language === 'en-US' ? english : chinese;
 
@@ -418,7 +419,7 @@ async function loadSession() {
     document.documentElement.dataset.canBrowse = String(canBrowse);
     const avatar = byId('kitchen-avatar');
     if (canBrowse) {
-        if (!registrationOpen && !session.user) {
+        if (!publicAvatar && !session.user) {
             avatar.src = '/images/kitchen-avatar.jpg';
         } else if (!avatar.getAttribute('src')?.startsWith('/api/kitchen/avatar')) {
             refreshAvatar();

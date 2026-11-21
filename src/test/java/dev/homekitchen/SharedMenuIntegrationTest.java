@@ -5,7 +5,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,7 +39,7 @@ class SharedMenuIntegrationTest {
     void anonymousVisitorCanReadRecipesAndPhotosInChineseMode() throws Exception {
         mvc.perform(get("/")).andExpect(status().isOk())
                 .andExpect(content().string(containsString("lang=\"zh-CN\" data-private=\"false\"")))
-                .andExpect(content().string(containsString("data-registration-open=\"false\"")));
+                .andExpect(content().string(containsString("data-registration-open=\"true\"")));
         mvc.perform(get("/api/dishes")).andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].recipe.steps[0]").isNotEmpty());
         mvc.perform(get("/images/ginger-rice.jpg")).andExpect(status().isOk());
@@ -53,13 +55,35 @@ class SharedMenuIntegrationTest {
     }
 
     @Test
-    void registrationAndAnonymousWritesStayClosed() throws Exception {
-        mvc.perform(post("/api/register").with(csrf())).andExpect(status().isUnauthorized());
-        mvc.perform(post("/api/register").with(csrf()).with(user("guest"))).andExpect(status().isForbidden());
+    void anonymousWritesAndGuestManagerActionsStayClosed() throws Exception {
+        mvc.perform(post("/api/register")).andExpect(status().isForbidden());
         mvc.perform(get("/api/orders")).andExpect(status().isUnauthorized());
         mvc.perform(post("/api/orders").with(csrf())).andExpect(status().isUnauthorized());
         mvc.perform(put("/api/favorites/1").with(csrf())).andExpect(status().isUnauthorized());
         mvc.perform(post("/api/admin/dishes").with(csrf()).with(user("guest"))).andExpect(status().isForbidden());
         mvc.perform(patch("/api/orders/1/status").with(csrf()).with(user("guest"))).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void registrationKeepsDisplayCaseAndRejectsASecondAccountWithDifferentCase() throws Exception {
+        String password = java.util.UUID.randomUUID().toString();
+        String registration = """
+                {"username":"CaseFixture","password":"%s","role":"ADMIN"}
+                """.formatted(password);
+        mvc.perform(post("/api/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(registration))
+                .andExpect(status().isCreated());
+
+        var result = mvc.perform(post("/api/login").with(csrf())
+                        .param("username", "casefixture").param("password", password))
+                .andExpect(status().isNoContent()).andReturn();
+        var session = (MockHttpSession) result.getRequest().getSession(false);
+        mvc.perform(get("/api/session").session(session))
+                .andExpect(jsonPath("$.user.username").value("CaseFixture"))
+                .andExpect(jsonPath("$.user.role").value("GUEST"));
+
+        mvc.perform(post("/api/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(registration.replace("CaseFixture", "CASEFIXTURE")))
+                .andExpect(status().isConflict());
     }
 }
