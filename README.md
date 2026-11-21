@@ -1,10 +1,25 @@
 # Home Kitchen
 
-[Open the live portfolio app](https://home-kitchen-ordering-demo.onrender.com/)
+[Try the live demo](https://home-kitchen-ordering-demo.onrender.com/)
 
-Home Kitchen is a Java 21 ordering app. Guests browse a photo menu, read recipes, save favorites, and place orders. Managers edit dishes and take orders from Placed to Preparing to Completed.
+Home Kitchen is a responsive ordering app built with Java 21 and Spring Boot. Guests browse a photo menu, read recipes, save favorites, and place orders. Managers edit dishes and move orders from Placed to Preparing to Completed.
 
-Spring Boot serves the responsive interface and API from the same origin. Spring Security handles sessions and roles. Spring Data JPA, PostgreSQL, and Flyway handle data and migrations. The public site uses fictional recipes and generated photos.
+![Home Kitchen’s English menu with dish photos and category navigation](docs/screenshots/portfolio-menu.jpg)
+
+## Try it online
+
+1. Open **Menu** and select a dish to view its photo, ingredients, and preparation steps.
+2. Go to **My Account** to create a guest account. Sign in to save favorites or place a sample order from **Cart**.
+3. Open **Orders** to see your order status and total.
+
+The live site uses fictional recipes and generated photos. The first page load may take longer after the service has been idle. To try the manager workflow, create a local manager using the instructions below.
+
+## How it works
+
+- Spring Boot serves the responsive interface and API from the same origin. Spring Data JPA handles persistence, and Flyway manages the PostgreSQL schema.
+- Spring Security enforces guest and manager permissions. Guests can see their own orders. Managers can edit dishes, view all orders, and update kitchen status.
+- Each order line stores the dish name and unit price at checkout. The server calculates totals using decimal arithmetic, so later menu edits leave historical receipts intact.
+- PostgreSQL row locks serialize concurrent updates to the same order. The server rejects invalid status transitions with HTTP 409.
 
 ## Run locally
 
@@ -33,7 +48,7 @@ Open [http://127.0.0.1:8080](http://127.0.0.1:8080). The app binds to loopback b
 
 Use **My Account → Create an account** to create a guest. Anyone can browse the public menu. Guests and managers both use **My Account → Sign in**. The account role determines access. A signed-in guest can place orders, view their own order history, edit their nickname, and manage favorites.
 
-To create a local manager, set the following environment variables before starting the app. Choose a new password when prompted.
+To create a local manager, stop the app if it is running. Keep the database settings from **Run locally**, then run these commands in Bash or Zsh. Choose a new password when prompted.
 
 ```sh
 export KITCHEN_ADMIN_USERNAME=demo_manager
@@ -54,14 +69,12 @@ python3 -m venv .venv
 .venv/bin/python tools/set_local_manager_password.py demo_manager
 ```
 
-## Demo walkthrough
+## Try the manager workflow locally
 
 1. In **Menu**, open **Ginger Scallion Rice** to view its photo, ingredients, steps, and tips.
 2. Sign in as a guest. Add two **Ginger Scallion Rice** and one **Sesame Garden Dumplings**. Open **Cart**, confirm the **$24.25** estimate, and click **Place order**. Look up the order in **Orders**.
 3. In a separate browser session, sign in as the manager and open **Orders**. Click **Start preparing** and then **Mark completed** on the same order.
 4. Managers can choose **Add dish** in the menu or **Edit recipe** in a dish's detail view. JPEG and PNG uploads allow a preview and removal, with a 1 MB upload limit.
-
-![English portfolio menu](docs/screenshots/portfolio-menu.jpg)
 
 ## Import a legacy menu locally
 
@@ -76,25 +89,22 @@ export LEGACY_IMPORT_DB_URL=jdbc:postgresql://127.0.0.1:5432/home_kitchen_legacy
 
 The script uses `DB_USER` and `DB_PASSWORD` from the shell, reads the SQLite `dish` table in read-only mode, and accepts a loopback PostgreSQL destination. It uses a stable category and dish-name key so reruns leave the imported records and subsequent edits intact. The script reports import counts and missing fields. A fresh application database includes the synthetic menu and creates no guest accounts.
 
-## Deploy on Render
+## Deploy the English portfolio on Render
 
-Use the Docker runtime and set the health check path to `/healthz`. The same image serves both deployment modes. Each service needs its own PostgreSQL database.
+Create a Render Web Service with the Docker runtime. The Dockerfile starts Spring Boot on Render's assigned port. Set the health check path to `/healthz`.
 
-| Variable | Public portfolio | Private kitchen |
-| --- | --- | --- |
-| `KITCHEN_MODE` | `public` | `private` (default) |
-| `KITCHEN_LANGUAGE` | `en-US` (public default) | `zh-CN` (private default) |
-| `DB_URL`, `DB_USER`, `DB_PASSWORD` | Synthetic-data database | Separate private database |
-| `KITCHEN_ADMIN_USERNAME`, `KITCHEN_ADMIN_PASSWORD` | Optional manager bootstrap | Optional manager bootstrap |
-| `KITCHEN_GUEST_USERNAME`, `KITCHEN_GUEST_PASSWORD` | Guest self-registration | Optional second account bootstrap |
+| Variable | Value |
+| --- | --- |
+| `KITCHEN_MODE` | `public` enables anonymous menu browsing and guest registration. |
+| `KITCHEN_LANGUAGE` | `en-US` is the default in public mode. |
+| `DB_URL`, `DB_USER`, `DB_PASSWORD` | Use a dedicated PostgreSQL database for the fictional menu. Flyway seeds it on startup. |
+| `KITCHEN_ADMIN_USERNAME`, `KITCHEN_ADMIN_PASSWORD` | Optional manager bootstrap. The password is stored as a BCrypt hash. |
 
-Use a direct Neon JDBC URL with certificate validation, for example
+For Neon, use a direct JDBC URL with certificate validation, for example
 `jdbc:postgresql://<endpoint>/<database>?sslmode=verify-full&sslfactory=org.postgresql.ssl.DefaultJavaSSLFactory`.
-Supply credentials as deployment secrets. Bootstrap variables create accounts with BCrypt hashes on first use and can be removed after provisioning.
+Set database credentials and any bootstrap password in Render's environment settings.
 
-In private mode the server disables registration and requires authentication for the menu API, recipe images, and avatar. To replace Flyway's sample rows in an empty private instance with a reviewed local menu, use `tools/copy_private_menu.py`. It prompts for the dedicated destination connection and copies rows and images directly between databases. Verify private access controls before importing a private menu.
-
-The public [health endpoint](https://home-kitchen-ordering-demo.onrender.com/healthz) accepts a read-only GET and returns HTTP 200 with `ok` when the application is running. It needs neither a session nor a database query. Render Free services can take time to respond after idling.
+The public [health endpoint](https://home-kitchen-ordering-demo.onrender.com/healthz) returns HTTP 200 with `ok` when the application is running. It requires neither a session nor a database query.
 
 ## Test with PostgreSQL
 
@@ -111,6 +121,4 @@ The integration tests exercise the HTTP endpoints against PostgreSQL. They cover
 
 ## Ordering rules
 
-- Each order line uses a distinct dish ID and a whole-number quantity from 1 to 3. Unknown and sold-out dishes are rejected.
-- The server reads the current menu price, records the dish name and unit price on the order line, and calculates the order total using decimal arithmetic. Later menu edits leave the saved receipt intact.
-- The kitchen accepts only `Placed → Preparing → Completed`. It serializes concurrent updates to the same order with a database row lock and rejects invalid transitions with HTTP 409.
+Each order line uses a distinct dish ID and a whole-number quantity from 1 to 3. Unknown and sold-out dishes are rejected. Orders start in Placed and can move to Preparing, then to Completed.
