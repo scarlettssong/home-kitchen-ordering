@@ -683,3 +683,7 @@ button:disabled { cursor: default; }
 #editable-steps { padding-left: 22px; }
 .step-fields { display: flex; align-items: flex-start; gap: 6px; }
 .row-remove { font-size: 12px; padding: 7px 7px; }
+
+:root[data-private="true"]:not([data-can-browse="true"]) :is(.header-nav, .bottom-nav, #cart-button, #view-menu) {
+    display: none;
+}

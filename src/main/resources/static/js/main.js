@@ -1,3 +1,7 @@
+const privateMode = document.documentElement.dataset.private === 'true';
+const language = document.documentElement.lang;
+const text = (chinese, english) => language === 'en-US' ? english : chinese;
+
 const byId = id => document.getElementById(id);
 const maxPerDish = 3;
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
@@ -5,10 +9,18 @@ const categories = document.querySelectorAll('[data-category]');
 const tabs = document.querySelectorAll('[data-view]');
 const views = document.querySelectorAll('main[id]');
 const dialog = byId('dish-modal');
-const orderTime = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' });
+const orderTime = new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' });
 const recipeSplit = matchMedia('(min-width: 850px)');
 const cart = new Map();
-const statusLabels = { PLACED: '已下单', PREPARING: '制作中', COMPLETED: '已完成' };
+const statusLabels = { PLACED: text('已下单', 'Placed'), PREPARING: text('制作中', 'Preparing'), COMPLETED: text('已完成', 'Completed') };
+const legacyDemoNames = new Map(Object.entries({
+    姜葱香米饭: 'Ginger Scallion Rice',
+    芝麻蔬菜煎饺: 'Sesame Garden Dumplings',
+    番茄罗勒烤吐司: 'Tomato Basil Toast',
+    味噌蘑菇饭团: 'Miso Mushroom Onigiri',
+    蜂蜜燕麦布丁: 'Honey Oat Pudding',
+    柑橘云朵蛋糕: 'Citrus Cloud Cake'
+}));
 const nextStatus = { PLACED: 'PREPARING', PREPARING: 'COMPLETED' };
 
 let dishes = [];
@@ -46,8 +58,8 @@ async function request(path, options = {}) {
     const response = await fetch(path, { ...options, headers });
     if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        const hints = { 401: '请检查登录信息或重新登录。', 403: '没有权限执行此操作。', 413: '图片不能超过 1 MB。' };
-        const failure = new Error(hints[response.status] ?? error.detail ?? '请求失败，请稍后重试。');
+        const hints = { 401: text('请检查登录信息或重新登录。', 'Check your credentials or sign in again.'), 403: text('没有权限执行此操作。', 'You do not have permission to do that.'), 413: text('图片不能超过 1 MB。', 'Images must be 1 MB or smaller.') };
+        const failure = new Error(hints[response.status] ?? error.detail ?? text('请求失败，请稍后重试。', 'The request failed. Please try again.'));
         failure.status = response.status;
         throw failure;
     }
@@ -85,12 +97,12 @@ function showToast(message) {
 
 function quantityControls(dish, quantity) {
     const add = button(quantity ? 'counter-btn' : 'add-btn', '+', event => updateCart(dish, 1, event));
-    add.setAttribute('aria-label', `增加一份${dish.name}`);
+    add.setAttribute('aria-label', text(`增加一份${dish.name}`, `Add one ${dish.name}`));
     add.disabled = quantity >= maxPerDish || submitting || !dish.available;
     if (!quantity) return add;
 
     const subtract = button('counter-btn', '−', event => updateCart(dish, -1, event));
-    subtract.setAttribute('aria-label', `减少一份${dish.name}`);
+    subtract.setAttribute('aria-label', text(`减少一份${dish.name}`, `Remove one ${dish.name}`));
     subtract.disabled = submitting;
 
     const group = element('div', 'counter-group');
@@ -111,8 +123,8 @@ function updateCart(dish, delta, event) {
     renderCart();
     const controls = [...container.querySelectorAll('button:not(:disabled)')];
     const focusTarget = controls.find(node => node.getAttribute('aria-label') === label)
-        ?? controls.find(node => node.getAttribute('aria-label') === `增加一份${dish.name}`)
-        ?? controls.find(node => node.getAttribute('aria-label') === `减少一份${dish.name}`)
+        ?? controls.find(node => node.getAttribute('aria-label') === text(`增加一份${dish.name}`, `Add one ${dish.name}`))
+        ?? controls.find(node => node.getAttribute('aria-label') === text(`减少一份${dish.name}`, `Remove one ${dish.name}`))
         ?? controls[0]
         ?? (container.id === 'cart-items-container' ? byId('back-to-menu') : [...tabs].find(tab => tab.classList.contains('active') && tab.getClientRects().length));
     focusTarget.focus({ preventScroll: true });
@@ -124,14 +136,14 @@ function renderCategory() {
     visible.sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)));
     const list = byId('full-dish-list');
     const count = byId('menu-count');
-    count.textContent = `${visible.length} 道菜品`;
+    count.textContent = text(`${visible.length} 道菜品`, `${visible.length} ${visible.length === 1 ? 'dish' : 'dishes'}`);
     count.hidden = false;
     byId('add-dish').hidden = !isAdmin();
     list.replaceChildren();
     for (const dish of visible) {
         const card = element('article', 'dish-card');
         const link = button('dish-link', undefined, () => openDishDetails(dish));
-        link.setAttribute('aria-label', `查看${dish.name}菜谱`);
+        link.setAttribute('aria-label', text(`查看${dish.name}菜谱`, `View recipe for ${dish.name}`));
         link.dataset.dishId = dish.id;
         const photo = element('img', 'dish-img');
         photo.src = dish.imagePath ?? '/images/kitchen-avatar.jpg';
@@ -142,7 +154,7 @@ function renderCategory() {
         if (favorites.has(dish.id)) {
             const heart = element('span', 'dish-favorite', '♥');
             heart.setAttribute('aria-hidden', 'true');
-            const label = element('span', 'sr-only', '已收藏');
+            const label = element('span', 'sr-only', text('已收藏', 'Favorited'));
             label.id = `dish-favorite-${dish.id}`;
             descriptions.push(label.id);
             thumbnail.append(heart, label);
@@ -158,7 +170,7 @@ function renderCategory() {
         if (dish.available) {
             details.append(quantityControls(dish, cart.get(dish.id) ?? 0));
         } else {
-            const availability = element('span', 'sold-out', '已售罄');
+            const availability = element('span', 'sold-out', text('已售罄', 'Sold out'));
             availability.id = `dish-availability-${dish.id}`;
             details.append(availability);
             descriptions.push(availability.id);
@@ -169,7 +181,7 @@ function renderCategory() {
         card.append(link, details);
         list.append(card);
     }
-    if (!visible.length) list.append(element('p', 'empty', '这个菜系暂时没有菜品。'));
+    if (!visible.length) list.append(element('p', 'empty', text('这个菜系暂时没有菜品。', 'No dishes in this category yet.')));
 }
 
 function updateRecipeScrollTarget() {
@@ -227,9 +239,9 @@ function renderCart() {
         cents += Math.round(dish.price * 100) * quantity;
         count += quantity;
     }
-    if (!count) list.append(element('p', 'empty', '购物车空空如也。'));
+    if (!count) list.append(element('p', 'empty', text('购物车空空如也。', 'Your cart is empty.')));
     byId('cart-badge').textContent = count;
-    byId('cart-button').setAttribute('aria-label', `打开购物车（${count} 份）`);
+    byId('cart-button').setAttribute('aria-label', text(`打开购物车（${count} 份）`, `Open cart (${count} ${count === 1 ? 'item' : 'items'})`));
     byId('cart-total').textContent = money.format(cents / 100);
     byId('place-order').disabled = !count || submitting;
 }
@@ -249,7 +261,7 @@ async function placeOrder() {
     if (!session?.user) {
         returnToCart = true;
         switchTab('view-profile');
-        showNotice('请先登录，购物车会保留。');
+        showNotice(text('请先登录，购物车会保留。', 'Sign in to place your order. Your cart will be saved.'));
         return;
     }
     submitting = true;
@@ -265,7 +277,7 @@ async function placeOrder() {
             body: JSON.stringify({ items })
         });
         cart.clear();
-        showToast(`订单 #${order.id} 已下单 · ${money.format(order.total)}`);
+        showToast(text(`订单 #${order.id} 已下单 · ${money.format(order.total)}`, `Order #${order.id} placed · ${money.format(order.total)}`));
     } catch (error) {
         showNotice(error.message, true);
         await loadDishesFromServer().catch(() => {});
@@ -282,21 +294,22 @@ function orderCard(order) {
     const time = element('time', 'receipt-time', orderTime.format(new Date(order.createdAt)));
     time.dateTime = order.createdAt;
     heading.append(
-        element('h3', '', `订单 #${order.id}`),
+        element('h3', '', text(`订单 #${order.id}`, `Order #${order.id}`)),
         time,
         element('span', `status ${order.status.toLowerCase()}`, statusLabels[order.status]),
-        element('strong', 'receipt-total', `合计 ${money.format(order.total)}`)
+        element('strong', 'receipt-total', text(`合计 ${money.format(order.total)}`, `Total ${money.format(order.total)}`))
     );
     const list = element('ul', 'receipt-items');
     for (const item of order.items) {
         const line = element('li', 'receipt-line');
-        line.append(element('span', '', `${item.quantity} × ${item.name}`),
-            element('span', '', `${money.format(item.unitPrice)} / 份`));
+        const itemName = text(item.name, legacyDemoNames.get(item.name) ?? item.name);
+        line.append(element('span', '', `${item.quantity} × ${itemName}`),
+            element('span', '', text(`${money.format(item.unitPrice)} / 份`, `${money.format(item.unitPrice)} each`)));
         list.append(line);
     }
     const target = nextStatus[order.status];
     if (target && isAdmin()) {
-        const change = button('primary-btn order-action', target === 'PREPARING' ? '开始制作' : '标记完成',
+        const change = button('primary-btn order-action', target === 'PREPARING' ? text('开始制作', 'Start preparing') : text('标记完成', 'Mark completed'),
             async () => {
                 change.disabled = true;
                 showNotice();
@@ -306,7 +319,7 @@ function orderCard(order) {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ status: target })
                     });
-                    showNotice(`订单 #${updated.id} · ${statusLabels[updated.status]}`);
+                    showNotice(text(`订单 #${updated.id} · ${statusLabels[updated.status]}`, `Order #${updated.id} · ${statusLabels[updated.status]}`));
                     await renderOrders();
                 } catch (error) {
                     showNotice(error.message, true);
@@ -326,7 +339,7 @@ async function renderOrders() {
     const orders = await request('/api/orders');
     if (viewer !== session?.user?.username) return;
     list.replaceChildren(...orders.map(orderCard));
-    if (!orders.length) list.append(element('p', 'empty', '暂无订单。'));
+    if (!orders.length) list.append(element('p', 'empty', text('暂无订单。', 'No orders yet.')));
 }
 
 function refreshOrders() {
@@ -334,16 +347,17 @@ function refreshOrders() {
     list.replaceChildren();
     byId('refresh-orders').hidden = !session?.user;
     byId('view-order').classList.toggle('manager-orders', isAdmin());
-    byId('order-title').textContent = isAdmin() ? '厨房订单' : '我的订单';
+    byId('order-title').textContent = isAdmin() ? text('厨房订单', 'Kitchen orders') : text('我的订单', 'My orders');
     if (!session?.user) {
-        list.append(element('p', 'empty', '登录后可查看自己的订单。'));
-        list.append(button('secondary-btn', '前往登录', () => switchTab('view-profile')));
+        list.append(element('p', 'empty', text('登录后可查看自己的订单。', 'Sign in to view your orders.')));
+        list.append(button('secondary-btn', text('前往登录', 'Sign in'), () => switchTab('view-profile')));
         return;
     }
     renderOrders().catch(error => showNotice(error.message, true));
 }
 
 function switchTab(activeView) {
+    if (privateMode && !session?.user) activeView = 'view-profile';
     for (const view of views) view.hidden = view.id !== activeView;
     for (const tab of tabs) {
         const active = tab.dataset.view === activeView;
@@ -390,8 +404,8 @@ byId('place-order').addEventListener('click', placeOrder);
 function setRegistrationMode(enabled) {
     registering = enabled;
     byId('register-nickname').hidden = !enabled;
-    byId('toggle-register').textContent = enabled ? '返回登录' : '新食客注册';
-    byId('auth-submit').textContent = enabled ? '注册并登录' : '登录';
+    byId('toggle-register').textContent = enabled ? text('返回登录', 'Back to sign in') : text('新食客注册', 'Create an account');
+    byId('auth-submit').textContent = enabled ? text('注册并登录', 'Register and sign in') : text('登录', 'Sign in');
     const password = byId('auth-form').elements.password;
     password.value = '';
     password.autocomplete = enabled ? 'new-password' : 'current-password';
@@ -399,6 +413,17 @@ function setRegistrationMode(enabled) {
 
 async function loadSession() {
     session = await request('/api/session');
+    const canBrowse = !privateMode || Boolean(session.user);
+    document.documentElement.dataset.canBrowse = String(canBrowse);
+    const avatar = byId('kitchen-avatar');
+    if (canBrowse) {
+        if (!avatar.hasAttribute('src')) refreshAvatar();
+    } else {
+        avatar.removeAttribute('src');
+        dishes = [];
+        switchTab('view-profile');
+    }
+    avatar.hidden = !canBrowse;
     renderCategory();
     renderProfile();
 }
@@ -414,7 +439,7 @@ function renderProfile() {
 
     byId('profile-nickname').textContent = account.nickname;
     byId('profile-username').textContent = account.username;
-    byId('profile-role').textContent = isAdmin() ? '店长' : '尊贵食客';
+    byId('profile-role').textContent = isAdmin() ? text('店长', 'Manager') : text('尊贵食客', 'Guest');
     byId('avatar-settings').hidden = !isAdmin();
     const favorites = dishes.filter(dish => account.favorites.includes(dish.id));
     byId('favorites-list').replaceChildren(...favorites.map(dish => {
@@ -422,7 +447,7 @@ function renderProfile() {
         item.append(button('secondary-btn', dish.name, () => openDishDetails(dish)));
         return item;
     }));
-    if (!favorites.length) byId('favorites-list').append(element('li', 'empty', '暂无收藏菜品。'));
+    if (!favorites.length) byId('favorites-list').append(element('li', 'empty', text('暂无收藏菜品。', 'No favorite dishes yet.')));
 }
 
 async function submitAuth(event) {
@@ -444,18 +469,22 @@ async function submitAuth(event) {
         try {
             await request('/api/login', { method: 'POST', body: new URLSearchParams({ username, password }) });
         } catch (error) {
-            if (error.status === 401) throw new Error('用户名或密码不正确。');
-            if (error.status === 403) throw new Error('登录表单已过期，请刷新页面后重试。');
+            if (error.status === 401) throw new Error(text('用户名或密码不正确。', 'Incorrect username or password.'));
+            if (error.status === 403) throw new Error(text('登录表单已过期，请刷新页面后重试。', 'The sign-in form expired. Refresh the page and try again.'));
             throw error;
         }
         try {
             await loadSession();
             if (!session.user) throw new Error();
         } catch {
-            throw new Error('账号验证成功，但未能建立登录会话。请刷新当前页面后重试。');
+            throw new Error(text('账号验证成功，但未能建立登录会话。请刷新当前页面后重试。', 'Your credentials were verified, but we could not start a session. Refresh and try again.'));
         }
         form.reset();
-        if (!isAdmin()) showToast(`欢迎，${session.user.nickname}。`);
+        if (privateMode) {
+            await loadDishesFromServer();
+            switchTab('view-menu');
+        }
+        if (!isAdmin()) showToast(text(`欢迎，${session.user.nickname}。`, `Welcome, ${session.user.nickname}.`));
         if (returnToCart) {
             returnToCart = false;
             switchTab('view-cart');
@@ -482,7 +511,7 @@ async function logout() {
         await loadSession();
         renderCart();
         setRegistrationMode(false);
-        showNotice('已退出登录。');
+        showNotice(text('已退出登录。', 'Signed out.'));
     } catch (error) {
         showNotice(error.message, true);
     }
@@ -496,7 +525,7 @@ async function saveNickname(event) {
         form.reset();
         form.closest('details').open = false;
         renderProfile();
-        showNotice('已保存昵称。');
+        showNotice(text('已保存昵称。', 'Nickname saved.'));
     } catch (error) {
         showNotice(error.message, true);
     }
@@ -506,7 +535,7 @@ function renderRecipeActions() {
     const favorite = byId('favorite-dish');
     const selected = session?.user?.favorites.includes(recipeDish.id);
     favorite.hidden = !session?.user;
-    favorite.textContent = selected ? '♥ 已收藏' : '♡ 收藏';
+    favorite.textContent = selected ? text('♥ 已收藏', '♥ Favorited') : text('♡ 收藏', '♡ Add to favorites');
     favorite.setAttribute('aria-pressed', String(Boolean(selected)));
     byId('edit-dish').hidden = !isAdmin();
 }
@@ -547,7 +576,7 @@ async function saveAvatar(event) {
         await request('/api/admin/avatar', { method: 'PUT', body: new FormData(form) });
         form.reset();
         refreshAvatar();
-        showNotice('厨房头像已更新。');
+        showNotice(text('厨房头像已更新。', 'Kitchen avatar updated.'));
     } catch (error) {
         showNotice(error.message, true);
     }
@@ -557,7 +586,7 @@ async function resetAvatar() {
     try {
         await request('/api/admin/avatar', { method: 'DELETE' });
         refreshAvatar();
-        showNotice('已恢复默认头像。');
+        showNotice(text('已恢复默认头像。', 'Default avatar restored.'));
     } catch (error) {
         showNotice(error.message, true);
     }
@@ -607,7 +636,7 @@ function openEditor(dish) {
     byId('editable-steps').replaceChildren();
     for (const ingredient of dish?.recipe.ingredients ?? []) addIngredient(ingredient);
     for (const step of dish?.recipe.steps ?? []) addStep(step);
-    byId('editor-title').textContent = dish ? '编辑菜谱' : '添加新菜品';
+    byId('editor-title').textContent = dish ? text('编辑菜谱', 'Edit recipe') : text('添加新菜品', 'Add dish');
     byId('delete-dish').hidden = !dish;
     byId('recipe-view').hidden = true;
     editor.hidden = false;
@@ -628,9 +657,9 @@ function textField(label, value, maxLength) {
 
 function addIngredient(ingredient = { name: '', amount: '' }) {
     const row = element('div', 'ingredient-edit');
-    const name = textField('原料名称', ingredient.name, 120);
-    const amount = textField('用量', ingredient.amount, 80);
-    row.append(name, amount, button('secondary-btn row-remove', '移除', () => row.remove()));
+    const name = textField(text('原料名称', 'Ingredient name'), ingredient.name, 120);
+    const amount = textField(text('用量', 'Amount'), ingredient.amount, 80);
+    row.append(name, amount, button('secondary-btn row-remove', text('移除', 'Remove'), () => row.remove()));
     byId('editable-ingredients').append(row);
     return name;
 }
@@ -639,20 +668,20 @@ function addStep(step = '') {
     const item = element('li', 'step-edit');
     const row = element('div', 'step-fields');
     const input = element('textarea', '');
-    input.setAttribute('aria-label', '步骤内容');
-    input.placeholder = '步骤内容';
+    input.setAttribute('aria-label', text('步骤内容', 'Step instructions'));
+    input.placeholder = text('步骤内容', 'Step instructions');
     input.maxLength = 2000;
     input.rows = 2;
     input.value = step;
-    row.append(input, button('secondary-btn row-remove', '移除', () => item.remove()));
+    row.append(input, button('secondary-btn row-remove', text('移除', 'Remove'), () => item.remove()));
     item.append(row);
     byId('editable-steps').append(item);
     return input;
 }
 
 function validatePhoto(photo) {
-    if (photo.size > 1024 * 1024) throw new Error('图片不能超过 1 MB。');
-    if (!['image/jpeg', 'image/png'].includes(photo.type)) throw new Error('请选择 JPEG 或 PNG 图片。');
+    if (photo.size > 1024 * 1024) throw new Error(text('图片不能超过 1 MB。', 'Images must be 1 MB or smaller.'));
+    if (!['image/jpeg', 'image/png'].includes(photo.type)) throw new Error(text('请选择 JPEG 或 PNG 图片。', 'Choose a JPEG or PNG image.'));
 }
 
 function selectDishPhoto(event) {
@@ -682,7 +711,7 @@ async function saveDish(event) {
         return { name: name.value.trim(), amount: amount.value.trim() };
     });
     if (ingredients.some(item => item.amount && !item.name)) {
-        editorError('请填写有用量的原料名称。');
+        editorError(text('请填写有用量的原料名称。', 'Enter a name for each ingredient with an amount.'));
         return;
     }
     const steps = [...byId('editable-steps').querySelectorAll('textarea')]
@@ -694,7 +723,7 @@ async function saveDish(event) {
         removeImage: removePhoto
     };
     if (!data.name) {
-        editorError('请输入菜名。');
+        editorError(text('请输入菜名。', 'Enter a dish name.'));
         return;
     }
     const payload = new FormData();
@@ -710,7 +739,7 @@ async function saveDish(event) {
         dialog.close();
         activateCategory(data.category);
         await loadDishesFromServer();
-        showNotice('菜品已保存。');
+        showNotice(text('菜品已保存。', 'Dish saved.'));
     } catch (error) {
         if (dialog.open) editorError(error.message);
         else showNotice(error.message, true);
@@ -720,12 +749,12 @@ async function saveDish(event) {
 }
 
 async function deleteDish() {
-    if (!window.confirm('删除这道菜？已下单的订单会保留原菜名与价格。')) return;
+    if (!window.confirm(text('删除这道菜？已下单的订单会保留原菜名与价格。', 'Delete this dish? Existing orders will keep its original name and price.'))) return;
     try {
         await request(`/api/admin/dishes/${editingId}`, { method: 'DELETE' });
         dialog.close();
         await loadDishesFromServer();
-        showNotice('菜品已删除。');
+        showNotice(text('菜品已删除。', 'Dish deleted.'));
     } catch (error) {
         if (dialog.open) editorError(error.message);
         else showNotice(error.message, true);
@@ -744,7 +773,7 @@ function activateCategory(category) {
 }
 
 byId('refresh-orders').addEventListener('click', refreshOrders);
-byId('toggle-register').addEventListener('click', () => setRegistrationMode(!registering));
+byId('toggle-register').addEventListener('click', () => setRegistrationMode(!privateMode && !registering));
 byId('auth-form').addEventListener('submit', submitAuth);
 byId('logout').addEventListener('click', logout);
 byId('nickname-form').addEventListener('submit', saveNickname);
@@ -777,5 +806,12 @@ dialog.addEventListener('close', () => {
     recipeMenuPosition = undefined;
 });
 
+byId('toggle-register').hidden = privateMode;
+if (privateMode) switchTab('view-profile');
 renderCart();
-Promise.all([loadSession(), loadDishesFromServer()]).catch(error => showNotice(error.message, true));
+loadSession().then(() => {
+    if (!privateMode || session.user) {
+        if (privateMode) switchTab('view-menu');
+        return loadDishesFromServer();
+    }
+}).catch(error => showNotice(error.message, true));

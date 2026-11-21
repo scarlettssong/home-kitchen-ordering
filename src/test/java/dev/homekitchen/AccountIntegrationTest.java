@@ -36,7 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = {
         "spring.datasource.url=${TEST_DB_URL}",
         "spring.datasource.username=${TEST_DB_USER}",
-        "spring.datasource.password=${TEST_DB_PASSWORD}"
+        "spring.datasource.password=${TEST_DB_PASSWORD}",
+        "kitchen.mode=public"
 })
 @AutoConfigureMockMvc
 @Transactional

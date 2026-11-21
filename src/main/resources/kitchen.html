@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="{{language}}" data-private="{{privateMode}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>{{brand}}</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script defer src="/js/main.js"></script>
+</head>
+<body>
+    <div id="app-wrapper">
+        <header class="header">
+            <div class="header-shell">
+                <div class="brand">
+                    <img id="kitchen-avatar" alt="" hidden>
+                    <h1>{{brand}}</h1>
+                </div>
+                <nav class="header-nav" aria-label="{{navigation}}">
+                    <button class="nav-item active" type="button" data-view="view-menu" aria-current="page">{{orderFood}}</button>
+                    <button class="nav-item" type="button" data-view="view-order">{{orders}}</button>
+                    <button class="nav-item" type="button" data-view="view-profile">{{profile}}</button>
+                </nav>
+                <button class="cart-button" id="cart-button" type="button" aria-label="{{emptyCartLabel}}">
+                    <span aria-hidden="true">{{cart}}</span><span class="cart-badge" id="cart-badge" aria-hidden="true">0</span>
+                </button>
+            </div>
+        </header>
+        <p id="notice" role="status" hidden></p>
+
+        <main id="view-menu" class="main-container">
+            <div class="menu-scroll">
+                <section class="dish-list" aria-labelledby="menu-title">
+                    <div class="menu-heading">
+                        <div class="menu-heading-title">
+                            <h2 id="menu-title">{{menu}}</h2>
+                            <span id="menu-count" hidden></span>
+                        </div>
+                        <button class="add-dish" id="add-dish" type="button" hidden>{{addDish}}</button>
+                    </div>
+                    <nav class="cuisine-nav" aria-label="{{cuisines}}">
+                        <button class="cuisine-item active" type="button" data-category="All">{{all}}</button>
+                        <button class="cuisine-item" type="button" data-category="Chinese">{{chinese}}</button>
+                        <button class="cuisine-item" type="button" data-category="Western">{{western}}</button>
+                        <button class="cuisine-item" type="button" data-category="Japanese">{{japanese}}</button>
+                        <button class="cuisine-item" type="button" data-category="Dessert">{{dessert}}</button>
+                    </nav>
+                    <div id="full-dish-list" class="dish-grid">{{loading}}</div>
+                </section>
+            </div>
+        </main>
+
+        <main id="view-cart" class="main-view" hidden>
+            <div class="cart-title">
+                <button type="button" id="back-to-menu" aria-label="{{backToMenu}}">←</button>
+                <h2>{{reviewOrder}}</h2>
+            </div>
+            <div id="cart-items-container"></div>
+            <div class="cart-checkout">
+                <div class="cart-summary"><span>{{subtotal}}</span><strong id="cart-total">$0.00</strong></div>
+                <button id="place-order" class="primary-btn" type="button">{{placeOrder}}</button>
+            </div>
+        </main>
+
+        <main id="view-order" class="main-view order-view" hidden>
+            <div class="view-heading">
+                <h2 id="order-title">{{myOrders}}</h2>
+                <button id="refresh-orders" class="secondary-btn" type="button">{{refresh}}</button>
+            </div>
+            <div id="order-history-list"></div>
+        </main>
+
+        <main id="view-profile" class="main-view profile-view" hidden>
+            <section id="unlogged-box" class="auth-box">
+                <h2>{{signInTitle}}</h2>
+                <form id="auth-form" class="form-fields">
+                    <label>{{username}}<input name="username" required autocomplete="username" maxlength="40"></label>
+                    <label id="register-nickname" hidden>{{optionalNickname}}<input name="nickname" maxlength="60"></label>
+                    <label>{{password}}<input name="password" type="password" required autocomplete="current-password" maxlength="72"></label>
+                    <button id="auth-submit" class="primary-btn">{{signIn}}</button>
+                </form>
+                <button id="toggle-register" type="button" hidden class="secondary-btn">{{register}}</button>
+            </section>
+            <section id="logged-box" class="profile-panel" hidden>
+                <h2 class="profile-heading">{{profile}}</h2>
+                <div class="profile-columns">
+                    <section class="profile-card account-card" aria-label="{{account}}">
+                        <div class="profile-header-area">
+                            <div>
+                                <h3 id="profile-nickname"></h3>
+                                <p class="profile-username-line"><span lang="en">Username</span> <span id="profile-username"></span></p>
+                            </div>
+                            <span id="profile-role" class="account-role"></span>
+                        </div>
+                        <details class="nickname-settings">
+                            <summary>{{editNickname}}</summary>
+                            <form id="nickname-form" class="form-fields">
+                                <label>{{newNickname}}<input name="nickname" required maxlength="60"></label>
+                                <button class="primary-btn">{{saveNickname}}</button>
+                            </form>
+                        </details>
+                        <button id="logout" type="button" class="secondary-btn logout-button">{{logout}}</button>
+                    </section>
+                    <div class="profile-tools">
+                        <section class="profile-card">
+                            <h3>{{favorites}}</h3>
+                            <ul id="favorites-list"></ul>
+                        </section>
+                        <section id="avatar-settings" class="profile-card" hidden>
+                            <h3>{{avatar}}</h3>
+                            <form id="avatar-form" class="form-fields">
+                                <label>{{chooseAvatar}}<input name="image" type="file" accept="image/jpeg,image/png" required></label>
+                                <button class="primary-btn">{{saveAvatar}}</button>
+                            </form>
+                            <button id="reset-avatar" type="button" class="secondary-btn">{{resetAvatar}}</button>
+                        </section>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <nav class="bottom-nav" aria-label="{{navigation}}">
+            <button class="nav-item active" type="button" data-view="view-menu" aria-current="page">
+                <span class="nav-icon" aria-hidden="true">🍴</span>{{orderFood}}
+            </button>
+            <button class="nav-item" type="button" data-view="view-order">
+                <span class="nav-icon" aria-hidden="true">📝</span>{{orders}}
+            </button>
+            <button class="nav-item" type="button" data-view="view-profile">
+                <span class="nav-icon" aria-hidden="true">👤</span>{{my}}
+            </button>
+        </nav>
+    </div>
+
+    <p id="toast" role="status" hidden></p>
+
+    <dialog class="modal-content" id="dish-modal" aria-labelledby="modal-title">
+        <button class="close-icon" type="button" aria-label="{{closeRecipe}}" autofocus>×</button>
+        <div class="modal-scroll recipe-layout" id="recipe-view" tabindex="0" aria-label="{{recipe}}">
+            <figure class="recipe-photo"><img class="modal-img" id="modal-img" alt=""></figure>
+            <div class="modal-body" id="recipe-content" tabindex="-1" aria-label="{{recipeContent}}">
+                <div class="recipe-heading">
+                    <h2 id="modal-title"></h2>
+                    <div class="recipe-actions">
+                        <button id="favorite-dish" type="button" class="secondary-btn" hidden></button>
+                        <button id="edit-dish" type="button" class="secondary-btn" hidden>{{editRecipe}}</button>
+                    </div>
+                </div>
+                <p id="modal-price" class="dish-price"></p>
+                <p id="modal-description"></p>
+                <section class="modal-section" aria-labelledby="ingredients-title">
+                    <h3 id="ingredients-title">{{ingredients}}</h3>
+                    <dl id="modal-ingredients"></dl>
+                </section>
+                <section class="modal-section" aria-labelledby="steps-title">
+                    <h3 id="steps-title">{{steps}}</h3>
+                    <ol id="modal-steps"></ol>
+                </section>
+                <section class="modal-section recipe-tips" id="modal-tips-area" aria-labelledby="tips-title" hidden>
+                    <h3 id="tips-title">{{tips}}</h3>
+                    <p id="modal-tips"></p>
+                </section>
+            </div>
+        </div>
+        <form id="dish-editor" hidden>
+            <div class="modal-scroll editor-scroll">
+                <h2 id="editor-title">{{editRecipe}}</h2>
+                <p id="editor-error" class="form-error" role="status" hidden></p>
+                <div class="form-fields">
+                    <label>{{dishName}}<input name="name" required maxlength="120"></label>
+                    <label>{{cuisines}}<select name="category">
+                        <option value="Chinese">{{chinese}}</option><option value="Western">{{western}}</option>
+                        <option value="Japanese">{{japanese}}</option><option value="Dessert">{{dessert}}</option>
+                    </select></label>
+                    <label>{{price}}<input name="price" type="number" min="0" max="99999999.99" step="0.01" required></label>
+                    <label>{{description}}<textarea name="description" rows="2" maxlength="240"></textarea></label>
+                    <label class="checkbox-row"><input name="available" type="checkbox">{{available}}</label>
+                    <label>{{photo}}<input name="photo" type="file" accept="image/jpeg,image/png"></label>
+                    <img id="editor-photo" alt="{{photoPreview}}" hidden>
+                    <button id="remove-photo" type="button" class="secondary-btn" hidden>{{removePhoto}}</button>
+                    <fieldset><legend>{{ingredientsAmounts}}</legend>
+                        <div id="editable-ingredients"></div>
+                        <button id="add-ingredient" type="button" class="secondary-btn">{{addIngredient}}</button>
+                    </fieldset>
+                    <fieldset><legend>{{instructions}}</legend>
+                        <ol id="editable-steps"></ol>
+                        <button id="add-step" type="button" class="secondary-btn">{{addStep}}</button>
+                    </fieldset>
+                    <label>{{optionalTips}}<textarea name="tips" rows="3" maxlength="4000"></textarea></label>
+                </div>
+            </div>
+            <div class="modal-footer editor-footer">
+                <button id="delete-dish" type="button" class="secondary-btn danger" hidden>{{deleteDish}}</button>
+                <button class="primary-btn">{{saveDish}}</button>
+            </div>
+        </form>
+    </dialog>
+</body>
+</html>

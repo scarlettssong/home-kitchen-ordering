@@ -24,11 +24,13 @@ class AccountService implements UserDetailsService {
     private final AccountRepository accounts;
     private final PasswordEncoder passwords;
     private final JdbcTemplate jdbc;
+    private final KitchenSite site;
 
-    AccountService(AccountRepository accounts, PasswordEncoder passwords, JdbcTemplate jdbc) {
+    AccountService(AccountRepository accounts, PasswordEncoder passwords, JdbcTemplate jdbc, KitchenSite site) {
         this.accounts = accounts;
         this.passwords = passwords;
         this.jdbc = jdbc;
+        this.site = site;
     }
 
     @Override
@@ -50,7 +52,7 @@ class AccountService implements UserDetailsService {
         try {
             accounts.saveAndFlush(account);
         } catch (DataIntegrityViolationException conflict) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "该用户名已注册。");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, site.text("该用户名已注册。", "That username is already registered."));
         }
     }
 
@@ -79,35 +81,45 @@ class AccountService implements UserDetailsService {
                 """, account.id, dishId);
         if (changed == 0 && Boolean.FALSE.equals(jdbc.queryForObject(
                 "select exists(select 1 from menu_item where id = ?)", Boolean.class, dishId))) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到该菜品。");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, site.text("找不到该菜品。", "Dish not found."));
         }
     }
 
     @Bean
-    ApplicationRunner provisionKitchenAdmin(
-            @Value("${KITCHEN_ADMIN_USERNAME:}") String username,
-            @Value("${KITCHEN_ADMIN_PASSWORD:}") String password) {
+    ApplicationRunner provisionKitchenAccounts(
+            @Value("${KITCHEN_ADMIN_USERNAME:}") String adminName,
+            @Value("${KITCHEN_ADMIN_PASSWORD:}") String adminPassword,
+            @Value("${KITCHEN_GUEST_USERNAME:}") String guestName,
+            @Value("${KITCHEN_GUEST_PASSWORD:}") String guestPassword) {
         return args -> {
-            if (username.isBlank() && password.isEmpty()) return;
-            String name = normalize(username);
-            if (!name.matches("[a-z0-9][a-z0-9_.-]{2,39}")) {
-                throw new IllegalArgumentException("KITCHEN_ADMIN_USERNAME must be a valid username");
-            }
-            jdbc.update("""
-                    insert into kitchen_account (username, nickname, password_hash, role)
-                    values (?, '小厨房店长', ?, 'ADMIN')
-                    on conflict (username) do nothing
-                    """, name, passwordHash(password));
-            if (account(name).role != KitchenAccount.Role.ADMIN) {
-                throw new IllegalStateException("KITCHEN_ADMIN_USERNAME already belongs to a guest");
+            provision(adminName, adminPassword, KitchenAccount.Role.ADMIN,
+                    site.text("小厨房店长", "Kitchen Manager"));
+            if (site.privateMode()) {
+                provision(guestName, guestPassword, KitchenAccount.Role.GUEST, guestName.strip());
             }
         };
+    }
+
+    private void provision(String username, String password, KitchenAccount.Role role, String nickname) {
+        if (username.isBlank() && password.isEmpty()) return;
+        String name = normalize(username);
+        if (!name.matches("[a-z0-9][a-z0-9_.-]{2,39}")) {
+            throw new IllegalArgumentException("Use a valid username for the " + role + " account");
+        }
+        jdbc.update("""
+                insert into kitchen_account (username, nickname, password_hash, role)
+                values (?, ?, ?, ?)
+                on conflict (username) do nothing
+                """, name, nickname, passwordHash(password), role.name());
+        if (account(name).role != role) {
+            throw new IllegalStateException("The configured username already belongs to a different role");
+        }
     }
 
     private String passwordHash(String password) {
         int length = password.getBytes(StandardCharsets.UTF_8).length;
         if (length < 8 || length > 72) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "密码需为 8 到 72 个 UTF-8 字节。");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, site.text("密码需为 8 到 72 个 UTF-8 字节。", "Use a password between 8 and 72 UTF-8 bytes."));
         }
         return passwords.encode(password);
     }

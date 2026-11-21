@@ -21,19 +21,29 @@ class SecurityConfiguration {
     }
 
     @Bean
-    SecurityFilterChain kitchenSecurity(HttpSecurity http) throws Exception {
+    SecurityFilterChain kitchenSecurity(HttpSecurity http, KitchenSite site) throws Exception {
         return http
-                .authorizeHttpRequests(rules -> rules
-                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/css/**", "/js/**",
-                                "/images/**", "/api/dishes", "/api/dishes/*/image",
-                                "/api/kitchen/avatar", "/api/session", "/healthz").permitAll()
-                        .requestMatchers(HttpMethod.HEAD, "/healthz").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/register").permitAll()
-                        .requestMatchers("/api/admin/**", "/api/orders/*/status").hasRole("ADMIN")
-                        .requestMatchers("/api/orders", "/api/orders/**", "/api/profile", "/api/favorites/**")
-                        .authenticated()
-                        .requestMatchers("/error").permitAll()
-                        .anyRequest().denyAll())
+                .authorizeHttpRequests(rules -> {
+                    rules.requestMatchers(HttpMethod.GET, "/", "/index.html", "/css/**", "/js/**",
+                            "/api/session", "/healthz").permitAll()
+                            .requestMatchers(HttpMethod.HEAD, "/healthz").permitAll();
+                    if (site.privateMode()) {
+                        rules.requestMatchers(HttpMethod.POST, "/api/register").denyAll()
+                                .requestMatchers("/api/dishes", "/api/dishes/**", "/api/kitchen/avatar", "/images/**")
+                                .authenticated();
+                    } else {
+                        rules.requestMatchers(HttpMethod.POST, "/api/register").permitAll()
+                                .requestMatchers(HttpMethod.GET, "/api/dishes", "/api/dishes/**", "/api/kitchen/avatar", "/images/**")
+                                .permitAll()
+                                .requestMatchers(HttpMethod.HEAD, "/api/dishes", "/api/dishes/**", "/api/kitchen/avatar", "/images/**")
+                                .permitAll();
+                    }
+                    rules.requestMatchers("/api/admin/**", "/api/orders/*/status").hasRole("ADMIN")
+                            .requestMatchers("/api/orders", "/api/orders/**", "/api/profile", "/api/favorites/**")
+                            .authenticated()
+                            .requestMatchers("/error").permitAll()
+                            .anyRequest().denyAll();
+                })
                 .requestCache(cache -> cache.disable())
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((request, response, failure) ->

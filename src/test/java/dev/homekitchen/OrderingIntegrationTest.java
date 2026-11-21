@@ -31,7 +31,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = {
         "spring.datasource.url=${TEST_DB_URL}",
         "spring.datasource.username=${TEST_DB_USER}",
-        "spring.datasource.password=${TEST_DB_PASSWORD}"
+        "spring.datasource.password=${TEST_DB_PASSWORD}",
+        "kitchen.mode=public"
 })
 @AutoConfigureMockMvc
 @Transactional
@@ -54,6 +55,16 @@ class OrderingIntegrationTest {
     }
 
     @Test
+    void publicHomeUsesEnglishAndAllowsBrowsingWithoutLogin() throws Exception {
+        mvc.perform(get("/")).andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "lang=\"en-US\" data-private=\"false\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("<title>Home Kitchen</title>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Create an account")));
+        mvc.perform(get("/images/ginger-rice.jpg")).andExpect(status().isOk());
+    }
+
+    @Test
     void healthCheckIsAnonymousAndReadOnly() throws Exception {
         mvc.perform(get("/healthz"))
                 .andExpect(status().isOk())
@@ -67,7 +78,7 @@ class OrderingIntegrationTest {
     void menuShowsSyntheticDishesAndAvailability() throws Exception {
         mvc.perform(get("/api/dishes"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].name").value("姜葱香米饭"))
+                .andExpect(jsonPath("$[0].name").value("Ginger Scallion Rice"))
                 .andExpect(jsonPath("$[0].available").value(true))
                 .andExpect(jsonPath("$[5].available").value(false));
     }
@@ -77,8 +88,8 @@ class OrderingIntegrationTest {
         mvc.perform(get("/api/dishes"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].imagePath").value("/images/ginger-rice.jpg"))
-                .andExpect(jsonPath("$[0].recipe.ingredients[0].name").value("茉莉香米"))
-                .andExpect(jsonPath("$[0].recipe.ingredients[0].amount").value("200 克"))
+                .andExpect(jsonPath("$[0].recipe.ingredients[0].name").value("Jasmine rice"))
+                .andExpect(jsonPath("$[0].recipe.ingredients[0].amount").value("200 g"))
                 .andExpect(jsonPath("$[0].recipe.steps[7]").isNotEmpty())
                 .andExpect(jsonPath("$[0].recipe.tips").isNotEmpty())
                 .andExpect(jsonPath("$[5].recipe.tips").isEmpty());
@@ -114,7 +125,7 @@ class OrderingIntegrationTest {
 
         mvc.perform(get("/api/orders/{id}", id).with(guest()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].name").value("姜葱香米饭"))
+                .andExpect(jsonPath("$.items[0].name").value("Ginger Scallion Rice"))
                 .andExpect(jsonPath("$.items[0].unitPrice").value(8.50))
                 .andExpect(jsonPath("$.items[0].quantity").value(2))
                 .andExpect(jsonPath("$.total").value(17.00));

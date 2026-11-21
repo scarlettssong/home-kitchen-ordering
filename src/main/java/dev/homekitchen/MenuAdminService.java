@@ -24,16 +24,18 @@ class MenuAdminService {
 
     private final MenuRepository menu;
     private final JdbcTemplate jdbc;
+    private final KitchenSite site;
 
-    MenuAdminService(MenuRepository menu, JdbcTemplate jdbc) {
+    MenuAdminService(MenuRepository menu, JdbcTemplate jdbc, KitchenSite site) {
         this.menu = menu;
         this.jdbc = jdbc;
+        this.site = site;
     }
 
     @Transactional
     long save(Long id, MenuAdminController.DishEdit edit, MultipartFile file) {
         var image = file == null ? null : readImage(file);
-        var dish = id == null ? new MenuItem() : menu.findById(id).orElseThrow(MenuAdminService::dishNotFound);
+        var dish = id == null ? new MenuItem() : menu.findById(id).orElseThrow(this::dishNotFound);
         dish.name = edit.name().strip();
         dish.category = edit.category();
         dish.price = edit.price();
@@ -60,13 +62,13 @@ class MenuAdminService {
 
     @Transactional
     void delete(long id) {
-        menu.delete(menu.findById(id).orElseThrow(MenuAdminService::dishNotFound));
+        menu.delete(menu.findById(id).orElseThrow(this::dishNotFound));
     }
 
     ResponseEntity<byte[]> dishImage(long id) {
         return jdbc.query("select image_data, image_media_type from menu_item where id = ? and image_data is not null",
                 rows -> rows.next() ? Optional.of(imageResponse(rows.getBytes(1), rows.getString(2))) : Optional.<ResponseEntity<byte[]>>empty(),
-                id).orElseThrow(MenuAdminService::dishNotFound);
+                id).orElseThrow(this::dishNotFound);
     }
 
     ResponseEntity<byte[]> avatar() {
@@ -94,9 +96,9 @@ class MenuAdminService {
                 .contentType(MediaType.parseMediaType(mediaType)).body(bytes);
     }
 
-    private static Image readImage(MultipartFile file) {
+    private Image readImage(MultipartFile file) {
         if (file.getSize() > MAX_IMAGE_BYTES) {
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "图片不能超过 1 MB。");
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, site.text("图片不能超过 1 MB。", "Images must be 1 MB or smaller."));
         }
         try {
             byte[] bytes = file.getBytes();
@@ -123,12 +125,13 @@ class MenuAdminService {
         }
     }
 
-    private static ResponseStatusException invalidImage() {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择可读取的 JPEG 或 PNG 图片，长宽最多 4096 像素。");
+    private ResponseStatusException invalidImage() {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, site.text("请选择可读取的 JPEG 或 PNG 图片，长宽最多 4096 像素。",
+                "Choose a valid JPEG or PNG image up to 4096 pixels on either side."));
     }
 
-    private static ResponseStatusException dishNotFound() {
-        return new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到该菜品。");
+    private ResponseStatusException dishNotFound() {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, site.text("找不到该菜品。", "Dish not found."));
     }
 
     private record Image(byte[] bytes, String mediaType) {}
