@@ -26,7 +26,8 @@ class SecurityConfiguration {
                 .authorizeHttpRequests(rules -> rules
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/css/**", "/js/**",
                                 "/images/**", "/api/dishes", "/api/dishes/*/image",
-                                "/api/kitchen/avatar", "/api/session").permitAll()
+                                "/api/kitchen/avatar", "/api/session", "/healthz").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, "/healthz").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/register").permitAll()
                         .requestMatchers("/api/admin/**", "/api/orders/*/status").hasRole("ADMIN")
                         .requestMatchers("/api/orders", "/api/orders/**", "/api/profile", "/api/favorites/**")

@@ -20,8 +20,11 @@ import java.util.UUID;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -48,6 +51,16 @@ class OrderingIntegrationTest {
                 values ('order_guest', 'Order Fixture', ?, 'GUEST'),
                        ('order_admin', 'Kitchen Fixture', ?, 'ADMIN')
                 """, hash, hash);
+    }
+
+    @Test
+    void healthCheckIsAnonymousAndReadOnly() throws Exception {
+        mvc.perform(get("/healthz"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("ok"))
+                .andExpect(header().doesNotExist("Set-Cookie"));
+        mvc.perform(head("/healthz")).andExpect(status().isOk());
+        mvc.perform(post("/healthz").with(guest()).with(csrf())).andExpect(status().isForbidden());
     }
 
     @Test

@@ -73,6 +73,24 @@ export LEGACY_IMPORT_DB_URL=jdbc:postgresql://127.0.0.1:5432/home_kitchen_legacy
 
 The script uses `DB_USER` and `DB_PASSWORD` from the shell, reads the SQLite `dish` table in read-only mode, and accepts a loopback PostgreSQL destination. It uses a stable category and dish-name key so reruns leave the imported records and subsequent edits intact. The script reports import counts and missing fields. A fresh application database includes the synthetic menu and creates no guest accounts.
 
+## Render demo
+
+Deploy the repository as a Render **Free Web Service** with the **Docker** runtime. The Dockerfile runs Spring Boot on Render's `PORT` and serves the page and API from the same HTTPS origin.
+
+Create a separate, empty Neon project for the demo. Set these values as environment variables in the new Render service:
+
+| Variable | Value |
+| --- | --- |
+| `DB_URL` | Direct Neon JDBC URL for the demo database, such as `jdbc:postgresql://<demo-endpoint>/<demo-database>?sslmode=verify-full&sslfactory=org.postgresql.ssl.DefaultJavaSSLFactory` |
+| `DB_USER` | Database role from that demo project |
+| `DB_PASSWORD` | Database role password from that demo project |
+| `KITCHEN_ADMIN_USERNAME` | Username for the demo manager |
+| `KITCHEN_ADMIN_PASSWORD` | Unique password for the demo manager |
+
+Flyway seeds the synthetic menu on first startup. Keep the Neon and manager credentials in Render's environment settings. The demo manager is for controlled smoke testing, and guests can register through the app.
+
+Set Render's Health Check Path to `/healthz`. For a read-only UptimeRobot HTTP monitor, use `GET https://<service>.onrender.com/healthz`. It returns HTTP 200 with the body `ok` when the application is running, without opening a session or querying Neon. Render Free services can take time to respond after idling.
+
 ## Test with PostgreSQL
 
 Use the separate database created above. The suite applies the Flyway migrations and rolls back its test data.
