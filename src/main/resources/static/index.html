@@ -32,7 +32,7 @@
                 <section class="dish-list" aria-labelledby="menu-title">
                     <div class="menu-heading">
                         <div class="menu-heading-title">
-                            <h2 id="menu-title">小厨房菜单</h2>
+                            <h2 id="menu-title">菜单</h2>
                             <span id="menu-count" hidden></span>
                         </div>
                         <button class="add-dish" id="add-dish" type="button" hidden>＋ 添加新菜品</button>
@@ -87,7 +87,7 @@
                         <div class="profile-header-area">
                             <div>
                                 <h3 id="profile-nickname"></h3>
-                                <p id="profile-username"></p>
+                                <p class="profile-username-line"><span lang="en">Username</span> <span id="profile-username"></span></p>
                             </div>
                             <span id="profile-role" class="account-role"></span>
                         </div>
@@ -130,6 +130,8 @@
             </button>
         </nav>
     </div>
+
+    <p id="toast" role="status" hidden></p>
 
     <dialog class="modal-content" id="dish-modal" aria-labelledby="modal-title">
         <button class="close-icon" type="button" aria-label="关闭菜谱" autofocus>×</button>

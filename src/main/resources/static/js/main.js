@@ -20,6 +20,7 @@ let recipeMenuPosition;
 let pointerStartedOnBackdrop = false;
 let registering = false;
 let returnToCart = false;
+let toastTimer;
 
 const isAdmin = () => session?.user?.role === 'ADMIN';
 
@@ -62,10 +63,24 @@ function sendJson(path, method, data) {
 }
 
 function showNotice(message = '', error = false) {
+    if (error) hideToast();
     const notice = byId('notice');
     notice.textContent = message;
     notice.classList.toggle('error', error);
     notice.hidden = !message;
+}
+
+function hideToast() {
+    clearTimeout(toastTimer);
+    byId('toast').hidden = true;
+}
+
+function showToast(message) {
+    hideToast();
+    const toast = byId('toast');
+    toast.hidden = false;
+    toast.textContent = message;
+    toastTimer = setTimeout(hideToast, 2500);
 }
 
 function quantityControls(dish, quantity) {
@@ -104,7 +119,9 @@ function updateCart(dish, delta, event) {
 }
 
 function renderCategory() {
-    const visible = currentCategory === 'All' ? dishes : dishes.filter(dish => dish.category === currentCategory);
+    const favorites = new Set(session?.user?.favorites);
+    const visible = dishes.filter(dish => currentCategory === 'All' || dish.category === currentCategory);
+    visible.sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)));
     const list = byId('full-dish-list');
     const count = byId('menu-count');
     count.textContent = `${visible.length} 道菜品`;
@@ -119,6 +136,17 @@ function renderCategory() {
         const photo = element('img', 'dish-img');
         photo.src = dish.imagePath ?? '/images/kitchen-avatar.jpg';
         photo.alt = '';
+        const thumbnail = element('span', 'dish-thumbnail');
+        thumbnail.append(photo);
+        const descriptions = [`dish-price-${dish.id}`];
+        if (favorites.has(dish.id)) {
+            const heart = element('span', 'dish-favorite', '♥');
+            heart.setAttribute('aria-hidden', 'true');
+            const label = element('span', 'sr-only', '已收藏');
+            label.id = `dish-favorite-${dish.id}`;
+            descriptions.push(label.id);
+            thumbnail.append(heart, label);
+        }
         const info = element('span', 'dish-info');
         info.append(element('span', 'dish-name', dish.name));
         if (dish.description) info.append(element('span', 'dish-description', dish.description));
@@ -127,17 +155,17 @@ function renderCategory() {
         const price = element('span', 'dish-price', money.format(dish.price));
         price.id = `dish-price-${dish.id}`;
         details.append(price);
-        link.setAttribute('aria-describedby', price.id);
         if (dish.available) {
             details.append(quantityControls(dish, cart.get(dish.id) ?? 0));
         } else {
             const availability = element('span', 'sold-out', '已售罄');
             availability.id = `dish-availability-${dish.id}`;
             details.append(availability);
-            link.setAttribute('aria-describedby', `${price.id} ${availability.id}`);
+            descriptions.push(availability.id);
         }
 
-        link.append(photo, info);
+        link.setAttribute('aria-describedby', descriptions.join(' '));
+        link.append(thumbnail, info);
         card.append(link, details);
         list.append(card);
     }
@@ -237,7 +265,7 @@ async function placeOrder() {
             body: JSON.stringify({ items })
         });
         cart.clear();
-        showNotice(`订单 #${order.id} 已下单 · ${money.format(order.total)}`);
+        showToast(`订单 #${order.id} 已下单 · ${money.format(order.total)}`);
     } catch (error) {
         showNotice(error.message, true);
         await loadDishesFromServer().catch(() => {});
@@ -379,7 +407,10 @@ function renderProfile() {
     const account = session?.user;
     byId('unlogged-box').hidden = Boolean(account);
     byId('logged-box').hidden = !account;
-    if (!account) return;
+    if (!account) {
+        byId('favorites-list').replaceChildren();
+        return;
+    }
 
     byId('profile-nickname').textContent = account.nickname;
     byId('profile-username').textContent = account.username;
@@ -424,7 +455,7 @@ async function submitAuth(event) {
             throw new Error('账号验证成功，但未能建立登录会话。请刷新当前页面后重试。');
         }
         form.reset();
-        if (!isAdmin()) showNotice(`欢迎，${session.user.nickname}。`);
+        if (!isAdmin()) showToast(`欢迎，${session.user.nickname}。`);
         if (returnToCart) {
             returnToCart = false;
             switchTab('view-cart');
@@ -442,8 +473,12 @@ async function submitAuth(event) {
 async function logout() {
     try {
         await request('/api/logout', { method: 'POST' });
+        hideToast();
+        session = null;
         cart.clear();
         byId('order-history-list').replaceChildren();
+        renderCategory();
+        renderProfile();
         await loadSession();
         renderCart();
         setRegistrationMode(false);
@@ -477,13 +512,21 @@ function renderRecipeActions() {
 }
 
 async function toggleFavorite() {
+    const account = session?.user;
+    if (!account) return;
+    const dishId = recipeDish.id;
     const control = byId('favorite-dish');
-    const selected = session.user.favorites.includes(recipeDish.id);
+    const selected = account.favorites.includes(dishId);
     control.disabled = true;
     try {
-        await request(`/api/favorites/${recipeDish.id}`, { method: selected ? 'DELETE' : 'PUT' });
-        await loadSession();
-        renderRecipeActions();
+        await request(`/api/favorites/${dishId}`, { method: selected ? 'DELETE' : 'PUT' });
+        if (session?.user !== account) return;
+        account.favorites = selected
+            ? account.favorites.filter(id => id !== dishId)
+            : [...account.favorites, dishId];
+        renderCategory();
+        renderProfile();
+        if (dialog.open && recipeDish.id === dishId) renderRecipeActions();
     } catch (error) {
         showNotice(error.message, true);
     } finally {
