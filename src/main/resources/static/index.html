@@ -10,25 +10,43 @@
 <body>
     <div id="app-wrapper">
         <header class="header">
-            <img id="kitchen-avatar" src="/api/kitchen/avatar" alt="">
-            <h1>Scarlett和Cris的小厨房</h1>
+            <div class="header-shell">
+                <div class="brand">
+                    <img id="kitchen-avatar" src="/api/kitchen/avatar" alt="">
+                    <h1>Scarlett和Cris的小厨房</h1>
+                </div>
+                <nav class="header-nav" aria-label="主导航">
+                    <button class="nav-item active" type="button" data-view="view-menu" aria-current="page">点餐</button>
+                    <button class="nav-item" type="button" data-view="view-order">订单</button>
+                    <button class="nav-item" type="button" data-view="view-profile">个人中心</button>
+                </nav>
+                <button class="cart-button" id="cart-button" type="button" aria-label="打开购物车（0 份）">
+                    <span aria-hidden="true">购物车</span><span class="cart-badge" id="cart-badge" aria-hidden="true">0</span>
+                </button>
+            </div>
         </header>
         <p id="notice" role="status" hidden></p>
 
         <main id="view-menu" class="main-container">
-            <nav class="sidebar" aria-label="菜系">
-                <button class="sidebar-item active" type="button" data-category="Chinese">中餐<span aria-hidden="true">🥢</span></button>
-                <button class="sidebar-item" type="button" data-category="Western">西餐<span aria-hidden="true">🍴</span></button>
-                <button class="sidebar-item" type="button" data-category="Japanese">日料<span aria-hidden="true">🍣</span></button>
-                <button class="sidebar-item" type="button" data-category="Dessert">甜品<span aria-hidden="true">🍰</span></button>
-            </nav>
-            <section class="dish-list" aria-labelledby="menu-title">
-                <h2 id="menu-title">中餐菜单</h2>
-                <div id="full-dish-list">正在加载菜单…</div>
-            </section>
-            <button class="cart-fab" id="cart-fab" type="button" aria-label="打开购物车（0 份）">
-                <span aria-hidden="true">🛒</span><span class="cart-badge" id="cart-badge" aria-hidden="true">0</span>
-            </button>
+            <div class="menu-scroll">
+                <section class="dish-list" aria-labelledby="menu-title">
+                    <div class="menu-heading">
+                        <div class="menu-heading-title">
+                            <h2 id="menu-title">小厨房菜单</h2>
+                            <span id="menu-count" hidden></span>
+                        </div>
+                        <button class="add-dish" id="add-dish" type="button" hidden>＋ 添加新菜品</button>
+                    </div>
+                    <nav class="cuisine-nav" aria-label="菜系">
+                        <button class="cuisine-item active" type="button" data-category="All">全部</button>
+                        <button class="cuisine-item" type="button" data-category="Chinese">中餐</button>
+                        <button class="cuisine-item" type="button" data-category="Western">西餐</button>
+                        <button class="cuisine-item" type="button" data-category="Japanese">日料</button>
+                        <button class="cuisine-item" type="button" data-category="Dessert">甜品</button>
+                    </nav>
+                    <div id="full-dish-list" class="dish-grid">正在加载菜单…</div>
+                </section>
+            </div>
         </main>
 
         <main id="view-cart" class="main-view" hidden>
@@ -110,9 +128,9 @@
 
     <dialog class="modal-content" id="dish-modal" aria-labelledby="modal-title">
         <button class="close-icon" type="button" aria-label="关闭菜谱" autofocus>×</button>
-        <div class="modal-scroll" id="recipe-view" tabindex="0" aria-label="菜谱内容">
-            <img class="modal-img" id="modal-img" alt="">
-            <div class="modal-body">
+        <div class="modal-scroll recipe-layout" id="recipe-view" tabindex="0" aria-label="菜谱">
+            <figure class="recipe-photo"><img class="modal-img" id="modal-img" alt=""></figure>
+            <div class="modal-body" id="recipe-content" tabindex="-1" aria-label="菜谱内容">
                 <div class="recipe-heading">
                     <h2 id="modal-title"></h2>
                     <div class="recipe-actions">

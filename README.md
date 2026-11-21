@@ -2,7 +2,7 @@
 
 Home Kitchen Menu is a local ordering demo for a Java developer portfolio. A customer browses a menu, adds dishes and quantities to a cart, and places an order. The kitchen then prepares and completes it.
 
-The application uses Java 21, Spring Boot, Spring Data JPA, PostgreSQL, and Flyway. Spring Boot serves a single-column Chinese menu, recipe dialog, and cart based on the original Flask app. The menu uses fictional recipes, generated food photos, and a generated kitchen avatar. The walkthrough creates a sample order.
+The application uses Java 21, Spring Boot, Spring Data JPA, PostgreSQL, and Flyway. Spring Boot serves a Chinese ordering interface with a photo grid, top navigation, and a two-pane recipe on desktop. Phones use a single-column menu and bottom navigation. The menu uses fictional recipes, generated food photos, and a generated kitchen avatar. The walkthrough creates a sample order.
 
 ## Run locally
 
@@ -58,7 +58,7 @@ python3 -m venv .venv
 3. In a separate browser session, sign in as the manager and open **订单**. Click **开始制作** and then **标记完成** on the same order.
 4. In **点餐**, the manager can use **添加新菜品** or open a recipe and choose **编辑菜谱**. JPEG and PNG uploads allow a preview and removal, with a 1 MB upload limit.
 
-[Desktop menu](docs/screenshots/restored-desktop-menu.png) · [Mobile menu](docs/screenshots/restored-mobile-menu.png) · [Mobile recipe at the final step and Tips](docs/screenshots/restored-mobile-recipe-end.png)
+[Desktop menu](docs/screenshots/responsive-desktop-menu.png) · [Desktop recipe](docs/screenshots/responsive-desktop-recipe.png) · [Mobile menu](docs/screenshots/responsive-mobile-menu.png) · [Mobile recipe at the final step and Tips](docs/screenshots/responsive-mobile-recipe-end.png)
 
 ## Import a legacy menu locally
 

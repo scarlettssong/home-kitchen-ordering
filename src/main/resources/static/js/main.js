@@ -5,13 +5,13 @@ const categories = document.querySelectorAll('[data-category]');
 const tabs = document.querySelectorAll('[data-view]');
 const views = document.querySelectorAll('main[id]');
 const dialog = byId('dish-modal');
-const categoryLabels = { Chinese: '中餐', Western: '西餐', Japanese: '日料', Dessert: '甜品' };
+const recipeSplit = matchMedia('(min-width: 850px)');
 const cart = new Map();
 const statusLabels = { PLACED: '已下单', PREPARING: '制作中', COMPLETED: '已完成' };
 const nextStatus = { PLACED: 'PREPARING', PREPARING: 'COMPLETED' };
 
 let dishes = [];
-let currentCategory = 'Chinese';
+let currentCategory = 'All';
 let submitting = false;
 let session;
 let recipeDish;
@@ -96,15 +96,19 @@ function updateCart(dish, delta, event) {
         ?? controls.find(node => node.getAttribute('aria-label') === `增加一份${dish.name}`)
         ?? controls.find(node => node.getAttribute('aria-label') === `减少一份${dish.name}`)
         ?? controls[0]
-        ?? (container.id === 'cart-items-container' ? byId('back-to-menu') : document.querySelector('.nav-item.active'));
+        ?? (container.id === 'cart-items-container' ? byId('back-to-menu') : [...tabs].find(tab => tab.classList.contains('active') && tab.getClientRects().length));
     focusTarget.focus({ preventScroll: true });
 }
 
 function renderCategory() {
-    byId('menu-title').textContent = `${categoryLabels[currentCategory]}菜单`;
+    const visible = currentCategory === 'All' ? dishes : dishes.filter(dish => dish.category === currentCategory);
     const list = byId('full-dish-list');
+    const count = byId('menu-count');
+    count.textContent = `${visible.length} 道菜品`;
+    count.hidden = false;
+    byId('add-dish').hidden = !isAdmin();
     list.replaceChildren();
-    for (const dish of dishes.filter(item => item.category === currentCategory)) {
+    for (const dish of visible) {
         const card = element('article', 'dish-card');
         const link = button('dish-link', undefined, () => openDishDetails(dish));
         link.setAttribute('aria-label', `查看${dish.name}菜谱`);
@@ -112,28 +116,38 @@ function renderCategory() {
         photo.src = dish.imagePath ?? '/images/kitchen-avatar.jpg';
         photo.alt = '';
         const info = element('span', 'dish-info');
+        info.append(element('span', 'dish-name', dish.name));
+        if (dish.description) info.append(element('span', 'dish-description', dish.description));
+
+        const details = element('div', 'dish-meta');
         const price = element('span', 'dish-price', money.format(dish.price));
         price.id = `dish-price-${dish.id}`;
-        info.append(element('span', 'dish-name', dish.name), price);
+        details.append(price);
         link.setAttribute('aria-describedby', price.id);
-        if (!dish.available) {
+        if (dish.available) {
+            details.append(quantityControls(dish, cart.get(dish.id) ?? 0));
+        } else {
             const availability = element('span', 'sold-out', '已售罄');
             availability.id = `dish-availability-${dish.id}`;
-            info.append(availability);
+            details.append(availability);
             link.setAttribute('aria-describedby', `${price.id} ${availability.id}`);
         }
 
         link.append(photo, info);
-        card.append(link);
-        if (dish.available) card.append(quantityControls(dish, cart.get(dish.id) ?? 0));
+        card.append(link, details);
         list.append(card);
     }
-    if (!list.hasChildNodes()) list.append(element('p', 'empty', '这个菜系暂时没有菜品。'));
-    if (isAdmin()) list.append(button('add-dish', '＋ 添加新菜品', () => openEditor()));
+    if (!visible.length) list.append(element('p', 'empty', '这个菜系暂时没有菜品。'));
+}
+
+function updateRecipeScrollTarget() {
+    byId('recipe-view').tabIndex = recipeSplit.matches ? -1 : 0;
+    byId('recipe-content').tabIndex = recipeSplit.matches ? 0 : -1;
 }
 
 function openDishDetails(dish) {
     recipeDish = dish;
+    dialog.classList.add('recipe-mode');
     byId('dish-editor').hidden = true;
     byId('recipe-view').hidden = false;
     byId('recipe-footer').hidden = false;
@@ -157,7 +171,9 @@ function openDishDetails(dish) {
     byId('modal-tips').textContent = recipe.tips ?? '';
     byId('modal-tips-area').hidden = !recipe.tips;
     if (!dialog.open) dialog.showModal();
+    updateRecipeScrollTarget();
     byId('recipe-view').scrollTop = 0;
+    byId('recipe-content').scrollTop = 0;
 }
 
 function renderCart() {
@@ -178,7 +194,7 @@ function renderCart() {
     }
     if (!count) list.append(element('p', 'empty', '购物车空空如也。'));
     byId('cart-badge').textContent = count;
-    byId('cart-fab').setAttribute('aria-label', `打开购物车（${count} 份）`);
+    byId('cart-button').setAttribute('aria-label', `打开购物车（${count} 份）`);
     byId('cart-total').textContent = money.format(cents / 100);
     byId('place-order').disabled = !count || submitting;
 }
@@ -308,13 +324,13 @@ for (const category of categories) {
     category.addEventListener('click', () => activateCategory(category.dataset.category));
 }
 for (const tab of tabs) tab.addEventListener('click', () => switchTab(tab.dataset.view));
-byId('cart-fab').addEventListener('click', () => {
+byId('cart-button').addEventListener('click', () => {
     switchTab('view-cart');
     byId('back-to-menu').focus();
 });
 byId('back-to-menu').addEventListener('click', () => {
     switchTab('view-menu');
-    byId('cart-fab').focus();
+    byId('cart-button').focus();
 });
 dialog.querySelector('.close-icon').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => {
@@ -510,12 +526,13 @@ function clearPreviewUrl() {
 
 function openEditor(dish) {
     editingId = dish?.id;
+    dialog.classList.remove('recipe-mode');
     removePhoto = false;
     clearPreviewUrl();
     editor.reset();
     editorError();
     editor.elements.name.value = dish?.name ?? '';
-    editor.elements.category.value = dish?.category ?? currentCategory;
+    editor.elements.category.value = dish?.category ?? (currentCategory === 'All' ? 'Chinese' : currentCategory);
     editor.elements.price.value = dish?.price ?? '';
     editor.elements.description.value = dish?.description ?? '';
     editor.elements.available.checked = dish?.available ?? true;
@@ -660,7 +677,7 @@ function activateCategory(category) {
         item.setAttribute('aria-pressed', String(active));
     }
     renderCategory();
-    document.querySelector('.dish-list').scrollTop = 0;
+    document.querySelector('.menu-scroll').scrollTop = 0;
 }
 
 byId('refresh-orders').addEventListener('click', refreshOrders);
@@ -671,6 +688,8 @@ byId('nickname-form').addEventListener('submit', saveNickname);
 byId('favorite-dish').addEventListener('click', toggleFavorite);
 byId('avatar-form').addEventListener('submit', saveAvatar);
 byId('reset-avatar').addEventListener('click', resetAvatar);
+byId('add-dish').addEventListener('click', () => openEditor());
+recipeSplit.addEventListener('change', updateRecipeScrollTarget);
 byId('edit-dish').addEventListener('click', () => openEditor(recipeDish));
 byId('add-ingredient').addEventListener('click', () => addIngredient().focus());
 byId('add-step').addEventListener('click', () => addStep().focus());
