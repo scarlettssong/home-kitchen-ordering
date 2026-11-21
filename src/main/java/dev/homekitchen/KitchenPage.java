@@ -24,6 +24,7 @@ class KitchenPage {
         page = MESSAGE.matcher(source).replaceAll(match -> Matcher.quoteReplacement(switch (match.group(1)) {
             case "language" -> site.language();
             case "privateMode" -> Boolean.toString(site.privateMode());
+            case "registrationOpen" -> Boolean.toString(site.registrationOpen());
             default -> messages.getString(match.group(1));
         }));
     }

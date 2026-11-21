@@ -1,4 +1,5 @@
 const privateMode = document.documentElement.dataset.private === 'true';
+const registrationOpen = document.documentElement.dataset.registrationOpen === 'true';
 const language = document.documentElement.lang;
 const text = (chinese, english) => language === 'en-US' ? english : chinese;
 
@@ -417,7 +418,11 @@ async function loadSession() {
     document.documentElement.dataset.canBrowse = String(canBrowse);
     const avatar = byId('kitchen-avatar');
     if (canBrowse) {
-        if (!avatar.hasAttribute('src')) refreshAvatar();
+        if (!registrationOpen && !session.user) {
+            avatar.src = '/images/kitchen-avatar.jpg';
+        } else if (!avatar.getAttribute('src')?.startsWith('/api/kitchen/avatar')) {
+            refreshAvatar();
+        }
     } else {
         avatar.removeAttribute('src');
         dishes = [];
@@ -773,7 +778,7 @@ function activateCategory(category) {
 }
 
 byId('refresh-orders').addEventListener('click', refreshOrders);
-byId('toggle-register').addEventListener('click', () => setRegistrationMode(!privateMode && !registering));
+byId('toggle-register').addEventListener('click', () => setRegistrationMode(registrationOpen && !registering));
 byId('auth-form').addEventListener('submit', submitAuth);
 byId('logout').addEventListener('click', logout);
 byId('nickname-form').addEventListener('submit', saveNickname);
@@ -806,7 +811,7 @@ dialog.addEventListener('close', () => {
     recipeMenuPosition = undefined;
 });
 
-byId('toggle-register').hidden = privateMode;
+byId('toggle-register').hidden = !registrationOpen;
 if (privateMode) switchTab('view-profile');
 renderCart();
 loadSession().then(() => {

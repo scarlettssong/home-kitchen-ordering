@@ -27,16 +27,19 @@ class SecurityConfiguration {
                     rules.requestMatchers(HttpMethod.GET, "/", "/index.html", "/css/**", "/js/**",
                             "/api/session", "/healthz").permitAll()
                             .requestMatchers(HttpMethod.HEAD, "/healthz").permitAll();
-                    if (site.privateMode()) {
-                        rules.requestMatchers(HttpMethod.POST, "/api/register").denyAll()
-                                .requestMatchers("/api/dishes", "/api/dishes/**", "/api/kitchen/avatar", "/images/**")
-                                .authenticated();
-                    } else {
+                    if (site.registrationOpen()) {
                         rules.requestMatchers(HttpMethod.POST, "/api/register").permitAll()
-                                .requestMatchers(HttpMethod.GET, "/api/dishes", "/api/dishes/**", "/api/kitchen/avatar", "/images/**")
-                                .permitAll()
-                                .requestMatchers(HttpMethod.HEAD, "/api/dishes", "/api/dishes/**", "/api/kitchen/avatar", "/images/**")
-                                .permitAll();
+                                .requestMatchers(HttpMethod.GET, "/api/kitchen/avatar").permitAll()
+                                .requestMatchers(HttpMethod.HEAD, "/api/kitchen/avatar").permitAll();
+                    } else {
+                        rules.requestMatchers(HttpMethod.POST, "/api/register").denyAll()
+                                .requestMatchers("/api/kitchen/avatar").authenticated();
+                    }
+                    if (site.privateMode()) {
+                        rules.requestMatchers("/api/dishes", "/api/dishes/**", "/images/**").authenticated();
+                    } else {
+                        rules.requestMatchers(HttpMethod.GET, "/api/dishes", "/api/dishes/**", "/images/**").permitAll()
+                                .requestMatchers(HttpMethod.HEAD, "/api/dishes", "/api/dishes/**", "/images/**").permitAll();
                     }
                     rules.requestMatchers("/api/admin/**", "/api/orders/*/status").hasRole("ADMIN")
                             .requestMatchers("/api/orders", "/api/orders/**", "/api/profile", "/api/favorites/**")
