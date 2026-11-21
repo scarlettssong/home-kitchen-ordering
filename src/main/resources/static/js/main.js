@@ -5,6 +5,7 @@ const categories = document.querySelectorAll('[data-category]');
 const tabs = document.querySelectorAll('[data-view]');
 const views = document.querySelectorAll('main[id]');
 const dialog = byId('dish-modal');
+const orderTime = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' });
 const recipeSplit = matchMedia('(min-width: 850px)');
 const cart = new Map();
 const statusLabels = { PLACED: '已下单', PREPARING: '制作中', COMPLETED: '已完成' };
@@ -15,6 +16,8 @@ let currentCategory = 'All';
 let submitting = false;
 let session;
 let recipeDish;
+let recipeMenuPosition;
+let pointerStartedOnBackdrop = false;
 let registering = false;
 let returnToCart = false;
 
@@ -112,6 +115,7 @@ function renderCategory() {
         const card = element('article', 'dish-card');
         const link = button('dish-link', undefined, () => openDishDetails(dish));
         link.setAttribute('aria-label', `查看${dish.name}菜谱`);
+        link.dataset.dishId = dish.id;
         const photo = element('img', 'dish-img');
         photo.src = dish.imagePath ?? '/images/kitchen-avatar.jpg';
         photo.alt = '';
@@ -147,10 +151,13 @@ function updateRecipeScrollTarget() {
 
 function openDishDetails(dish) {
     recipeDish = dish;
+    recipeMenuPosition = byId('view-menu').hidden ? undefined : {
+        category: currentCategory,
+        scrollTop: document.querySelector('.menu-scroll').scrollTop
+    };
     dialog.classList.add('recipe-mode');
     byId('dish-editor').hidden = true;
     byId('recipe-view').hidden = false;
-    byId('recipe-footer').hidden = false;
     dialog.setAttribute('aria-labelledby', 'modal-title');
     renderRecipeActions();
     const photo = byId('modal-img');
@@ -244,9 +251,13 @@ async function placeOrder() {
 function orderCard(order) {
     const card = element('article', 'history-card');
     const heading = element('div', 'receipt-heading');
+    const time = element('time', 'receipt-time', orderTime.format(new Date(order.createdAt)));
+    time.dateTime = order.createdAt;
     heading.append(
         element('h3', '', `订单 #${order.id}`),
-        element('span', `status ${order.status.toLowerCase()}`, statusLabels[order.status])
+        time,
+        element('span', `status ${order.status.toLowerCase()}`, statusLabels[order.status]),
+        element('strong', 'receipt-total', `合计 ${money.format(order.total)}`)
     );
     const list = element('ul', 'receipt-items');
     for (const item of order.items) {
@@ -255,12 +266,9 @@ function orderCard(order) {
             element('span', '', `${money.format(item.unitPrice)} / 份`));
         list.append(line);
     }
-    const actions = element('div', 'receipt-line');
-    actions.append(element('strong', '', `合计 ${money.format(order.total)}`));
-
     const target = nextStatus[order.status];
     if (target && isAdmin()) {
-        const change = button('primary-btn', target === 'PREPARING' ? '开始制作' : '标记完成',
+        const change = button('primary-btn order-action', target === 'PREPARING' ? '开始制作' : '标记完成',
             async () => {
                 change.disabled = true;
                 showNotice();
@@ -277,10 +285,10 @@ function orderCard(order) {
                     change.disabled = false;
                 }
             });
-        actions.append(change);
+        heading.append(change);
     }
 
-    card.append(heading, list, actions);
+    card.append(heading, list);
     return card;
 }
 
@@ -297,6 +305,7 @@ function refreshOrders() {
     const list = byId('order-history-list');
     list.replaceChildren();
     byId('refresh-orders').hidden = !session?.user;
+    byId('view-order').classList.toggle('manager-orders', isAdmin());
     byId('order-title').textContent = isAdmin() ? '厨房订单' : '我的订单';
     if (!session?.user) {
         list.append(element('p', 'empty', '登录后可查看自己的订单。'));
@@ -333,8 +342,20 @@ byId('back-to-menu').addEventListener('click', () => {
     byId('cart-button').focus();
 });
 dialog.querySelector('.close-icon').addEventListener('click', () => dialog.close());
+function isBackdrop(event) {
+    if (event.target !== dialog) return false;
+    const bounds = dialog.getBoundingClientRect();
+    return event.clientX < bounds.left || event.clientX >= bounds.right ||
+        event.clientY < bounds.top || event.clientY >= bounds.bottom;
+}
+
+dialog.addEventListener('pointerdown', event => {
+    pointerStartedOnBackdrop = event.isPrimary && event.button === 0 && isBackdrop(event);
+});
+dialog.addEventListener('pointercancel', () => { pointerStartedOnBackdrop = false; });
 dialog.addEventListener('click', event => {
-    if (event.target === dialog) dialog.close();
+    if (pointerStartedOnBackdrop && isBackdrop(event)) dialog.close();
+    pointerStartedOnBackdrop = false;
 });
 byId('place-order').addEventListener('click', placeOrder);
 
@@ -403,7 +424,7 @@ async function submitAuth(event) {
             throw new Error('账号验证成功，但未能建立登录会话。请刷新当前页面后重试。');
         }
         form.reset();
-        showNotice(`欢迎，${session.user.nickname}。`);
+        if (!isAdmin()) showNotice(`欢迎，${session.user.nickname}。`);
         if (returnToCart) {
             returnToCart = false;
             switchTab('view-cart');
@@ -546,7 +567,6 @@ function openEditor(dish) {
     byId('editor-title').textContent = dish ? '编辑菜谱' : '添加新菜品';
     byId('delete-dish').hidden = !dish;
     byId('recipe-view').hidden = true;
-    byId('recipe-footer').hidden = true;
     editor.hidden = false;
     dialog.setAttribute('aria-labelledby', 'editor-title');
     if (!dialog.open) dialog.showModal();
@@ -702,7 +722,17 @@ byId('remove-photo').addEventListener('click', () => {
 });
 byId('delete-dish').addEventListener('click', deleteDish);
 editor.addEventListener('submit', saveDish);
-dialog.addEventListener('close', clearPreviewUrl);
+dialog.addEventListener('close', () => {
+    clearPreviewUrl();
+    pointerStartedOnBackdrop = false;
+    if (dialog.classList.contains('recipe-mode') && recipeMenuPosition?.category === currentCategory &&
+            !byId('view-menu').hidden) {
+        const scroller = document.querySelector('.menu-scroll');
+        scroller.querySelector(`[data-dish-id="${recipeDish.id}"]`)?.focus({ preventScroll: true });
+        scroller.scrollTop = recipeMenuPosition.scrollTop;
+    }
+    recipeMenuPosition = undefined;
+});
 
 renderCart();
 Promise.all([loadSession(), loadDishesFromServer()]).catch(error => showNotice(error.message, true));

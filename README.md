@@ -58,7 +58,7 @@ python3 -m venv .venv
 3. In a separate browser session, sign in as the manager and open **订单**. Click **开始制作** and then **标记完成** on the same order.
 4. In **点餐**, the manager can use **添加新菜品** or open a recipe and choose **编辑菜谱**. JPEG and PNG uploads allow a preview and removal, with a 1 MB upload limit.
 
-[Desktop menu](docs/screenshots/responsive-desktop-menu.png) · [Desktop recipe](docs/screenshots/responsive-desktop-recipe.png) · [Mobile menu](docs/screenshots/responsive-mobile-menu.png) · [Mobile recipe at the final step and Tips](docs/screenshots/responsive-mobile-recipe-end.png)
+[Desktop menu](docs/screenshots/rose-desktop-menu.png) · [Manager orders](docs/screenshots/rose-desktop-orders.png) · [Manager profile](docs/screenshots/rose-desktop-profile.png)
 
 ## Import a legacy menu locally
 

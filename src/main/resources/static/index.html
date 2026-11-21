@@ -71,8 +71,7 @@
 
         <main id="view-profile" class="main-view profile-view" hidden>
             <section id="unlogged-box" class="auth-box">
-                <span class="welcome-icon" aria-hidden="true">🍳</span>
-                <h2>欢迎光临小厨房</h2>
+                <h2>登录小厨房</h2>
                 <form id="auth-form" class="form-fields">
                     <label>用户名<input name="username" required autocomplete="username" maxlength="40"></label>
                     <label id="register-nickname" hidden>昵称（选填）<input name="nickname" maxlength="60"></label>
@@ -82,34 +81,40 @@
                 <button id="toggle-register" type="button" class="secondary-btn">新食客注册</button>
             </section>
             <section id="logged-box" class="profile-panel" hidden>
-                <div class="profile-header-area">
-                    <span class="profile-avatar" aria-hidden="true">👤</span>
-                    <div>
-                        <h2 id="profile-nickname"></h2>
-                        <p id="profile-role"></p>
-                        <p id="profile-username"></p>
+                <h2 class="profile-heading">个人中心</h2>
+                <div class="profile-columns">
+                    <section class="profile-card account-card" aria-label="账号">
+                        <div class="profile-header-area">
+                            <div>
+                                <h3 id="profile-nickname"></h3>
+                                <p id="profile-username"></p>
+                            </div>
+                            <span id="profile-role" class="account-role"></span>
+                        </div>
+                        <details class="nickname-settings">
+                            <summary>编辑昵称</summary>
+                            <form id="nickname-form" class="form-fields">
+                                <label>新昵称<input name="nickname" required maxlength="60"></label>
+                                <button class="primary-btn">保存昵称</button>
+                            </form>
+                        </details>
+                        <button id="logout" type="button" class="secondary-btn logout-button">退出登录</button>
+                    </section>
+                    <div class="profile-tools">
+                        <section class="profile-card">
+                            <h3>我的收藏</h3>
+                            <ul id="favorites-list"></ul>
+                        </section>
+                        <section id="avatar-settings" class="profile-card" hidden>
+                            <h3>厨房头像</h3>
+                            <form id="avatar-form" class="form-fields">
+                                <label>选择头像（JPEG 或 PNG，最多 1 MB）<input name="image" type="file" accept="image/jpeg,image/png" required></label>
+                                <button class="primary-btn">保存头像</button>
+                            </form>
+                            <button id="reset-avatar" type="button" class="secondary-btn">恢复默认头像</button>
+                        </section>
                     </div>
                 </div>
-                <details class="profile-card">
-                    <summary>编辑昵称</summary>
-                    <form id="nickname-form" class="form-fields">
-                        <label>新昵称<input name="nickname" required maxlength="60"></label>
-                        <button class="primary-btn">保存昵称</button>
-                    </form>
-                </details>
-                <section class="profile-card">
-                    <h3>❤️ 我的收藏</h3>
-                    <ul id="favorites-list"></ul>
-                </section>
-                <section id="avatar-settings" class="profile-card" hidden>
-                    <h3>厨房头像</h3>
-                    <form id="avatar-form" class="form-fields">
-                        <label>选择头像（JPEG 或 PNG，最多 1 MB）<input name="image" type="file" accept="image/jpeg,image/png" required></label>
-                        <button class="primary-btn">保存头像</button>
-                    </form>
-                    <button id="reset-avatar" type="button" class="secondary-btn">恢复默认头像</button>
-                </section>
-                <button id="logout" type="button" class="secondary-btn logout-button">退出登录</button>
             </section>
         </main>
 
@@ -154,9 +159,6 @@
                 </section>
             </div>
         </div>
-        <form class="modal-footer" id="recipe-footer" method="dialog">
-            <button class="primary-btn">返回菜单</button>
-        </form>
         <form id="dish-editor" hidden>
             <div class="modal-scroll editor-scroll">
                 <h2 id="editor-title">编辑菜谱</h2>
