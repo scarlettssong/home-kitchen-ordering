@@ -73,6 +73,7 @@
             <section id="unlogged-box" class="auth-box">
                 <h2>{{signInTitle}}</h2>
                 <form id="auth-form" class="form-fields">
+                    <p id="auth-error" class="form-error" role="alert" hidden></p>
                     <label>{{username}}<input name="username" required autocomplete="username" maxlength="40"></label>
                     <label id="register-nickname" hidden>{{optionalNickname}}<input name="nickname" maxlength="60"></label>
                     <label>{{password}}<input name="password" type="password" required autocomplete="current-password" maxlength="72"></label>
@@ -94,6 +95,7 @@
                         <details class="account-settings">
                             <summary>{{editNickname}}</summary>
                             <form id="nickname-form" class="form-fields">
+                                <p id="nickname-error" class="form-error" role="alert" hidden></p>
                                 <label>{{newNickname}}<input name="nickname" required maxlength="60"></label>
                                 <button class="primary-btn">{{saveNickname}}</button>
                             </form>
@@ -118,6 +120,7 @@
                         <section id="avatar-settings" class="profile-card" hidden>
                             <h3>{{avatar}}</h3>
                             <form id="avatar-form" class="form-fields">
+                                <p id="avatar-error" class="form-error" role="alert" hidden></p>
                                 <label>{{chooseAvatar}}<input name="image" type="file" accept="image/jpeg,image/png" required></label>
                                 <button class="primary-btn">{{saveAvatar}}</button>
                             </form>

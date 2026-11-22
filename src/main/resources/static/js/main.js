@@ -92,12 +92,19 @@ function showNotice(message = '', error = false) {
     notice.hidden = !message;
 }
 
+function setFormError(id, message = '') {
+    const alert = byId(id);
+    alert.textContent = message;
+    alert.hidden = !message;
+}
+
 function hideToast() {
     clearTimeout(toastTimer);
     byId('toast').hidden = true;
 }
 
 function showToast(message) {
+    showNotice();
     hideToast();
     const toast = byId('toast');
     toast.hidden = false;
@@ -329,7 +336,7 @@ function orderCard(order) {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ status: target })
                     });
-                    showNotice(text(`订单 #${updated.id} · ${statusLabels[updated.status]}`, `Order #${updated.id} · ${statusLabels[updated.status]}`));
+                    showToast(text(`订单 #${updated.id} · ${statusLabels[updated.status]}`, `Order #${updated.id} · ${statusLabels[updated.status]}`));
                     await renderOrders();
                 } catch (error) {
                     showNotice(error.message, true);
@@ -413,6 +420,7 @@ byId('place-order').addEventListener('click', placeOrder);
 
 function setRegistrationMode(enabled) {
     registering = enabled;
+    setFormError('auth-error');
     byId('register-nickname').hidden = !enabled;
     byId('toggle-register').textContent = enabled ? text('返回登录', 'Back to sign in') : text('新食客注册', 'Create an account');
     byId('auth-submit').textContent = enabled ? text('注册并登录', 'Register and sign in') : text('登录', 'Sign in');
@@ -475,6 +483,7 @@ async function submitAuth(event) {
     submit.disabled = true;
     registration.disabled = true;
     showNotice();
+    setFormError('auth-error');
     try {
         if (!session) await loadSession();
         if (registering) {
@@ -505,7 +514,7 @@ async function submitAuth(event) {
             byId('place-order').focus();
         }
     } catch (error) {
-        showNotice(error.message, true);
+        setFormError('auth-error', error.message);
     } finally {
         form.elements.password.value = '';
         submit.disabled = false;
@@ -521,6 +530,8 @@ async function logout() {
         byId('password-form').reset();
         byId('password-error').hidden = true;
         byId('password-settings').open = false;
+        setFormError('nickname-error');
+        setFormError('avatar-error');
         cart.clear();
         byId('order-history-list').replaceChildren();
         renderCategory();
@@ -528,7 +539,7 @@ async function logout() {
         await loadSession();
         renderCart();
         setRegistrationMode(false);
-        showNotice(text('已退出登录。', 'Signed out.'));
+        showToast(text('已退出登录。', 'Signed out.'));
     } catch (error) {
         showNotice(error.message, true);
     }
@@ -536,15 +547,16 @@ async function logout() {
 
 async function saveNickname(event) {
     event.preventDefault();
+    setFormError('nickname-error');
     try {
         const form = event.currentTarget;
         session.user = await sendJson('/api/profile', 'PATCH', { nickname: form.elements.nickname.value });
         form.reset();
         form.closest('details').open = false;
         renderProfile();
-        showNotice(text('已保存昵称。', 'Nickname saved.'));
+        showToast(text('昵称已更新', 'Nickname updated'));
     } catch (error) {
-        showNotice(error.message, true);
+        setFormError('nickname-error', error.message);
     }
 }
 
@@ -607,6 +619,7 @@ function refreshAvatar() {
 
 async function saveAvatar(event) {
     event.preventDefault();
+    setFormError('avatar-error');
     const form = event.currentTarget;
     const image = form.elements.image.files[0];
     try {
@@ -614,19 +627,20 @@ async function saveAvatar(event) {
         await request('/api/admin/avatar', { method: 'PUT', body: new FormData(form) });
         form.reset();
         refreshAvatar();
-        showNotice(text('厨房头像已更新。', 'Kitchen avatar updated.'));
+        showToast(text('厨房头像已更新。', 'Kitchen avatar updated.'));
     } catch (error) {
-        showNotice(error.message, true);
+        setFormError('avatar-error', error.message);
     }
 }
 
 async function resetAvatar() {
+    setFormError('avatar-error');
     try {
         await request('/api/admin/avatar', { method: 'DELETE' });
         refreshAvatar();
-        showNotice(text('已恢复默认头像。', 'Default avatar restored.'));
+        showToast(text('已恢复默认头像。', 'Default avatar restored.'));
     } catch (error) {
-        showNotice(error.message, true);
+        setFormError('avatar-error', error.message);
     }
 }
 
@@ -873,7 +887,7 @@ async function saveDish(event) {
         dialog.close();
         activateCategory(data.category);
         await loadDishesFromServer();
-        showNotice(text('菜品已保存。', 'Dish saved.'));
+        showToast(text('菜品已保存。', 'Dish saved.'));
     } catch (error) {
         if (dialog.open) editorError(error.message);
         else showNotice(error.message, true);
@@ -890,7 +904,7 @@ async function deleteDish() {
         dishPhotoVersions.delete(editingId);
         dialog.close();
         await loadDishesFromServer();
-        showNotice(text('菜品已删除。', 'Dish deleted.'));
+        showToast(text('菜品已删除。', 'Dish deleted.'));
     } catch (error) {
         if (dialog.open) editorError(error.message);
         else showNotice(error.message, true);
