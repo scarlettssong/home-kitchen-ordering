@@ -6,6 +6,8 @@ const language = document.documentElement.lang;
 const text = (chinese, english) => language === 'en-US' ? english : chinese;
 
 const byId = id => document.getElementById(id);
+const kitchenAvatar = byId('kitchen-avatar');
+const defaultKitchenAvatar = '/images/kitchen-avatar.jpg';
 const maxPerDish = 3;
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const categories = new Map([...document.querySelectorAll('[data-category]')]
@@ -641,19 +643,18 @@ async function loadSession() {
     session = await request('/api/session');
     const canBrowse = !privateMode || Boolean(session.user);
     document.documentElement.dataset.canBrowse = String(canBrowse);
-    const avatar = byId('kitchen-avatar');
     if (canBrowse) {
         if (!publicAvatar && !session.user) {
-            avatar.src = '/images/kitchen-avatar.jpg';
-        } else if (!avatar.getAttribute('src')?.startsWith('/api/kitchen/avatar')) {
+            kitchenAvatar.src = defaultKitchenAvatar;
+        } else if (!kitchenAvatar.getAttribute('src')?.startsWith('/api/kitchen/avatar')) {
             refreshAvatar();
         }
     } else {
-        avatar.removeAttribute('src');
+        kitchenAvatar.removeAttribute('src');
         dishes = [];
         switchTab('view-profile');
     }
-    avatar.hidden = !canBrowse;
+    kitchenAvatar.hidden = !canBrowse;
     renderCategory();
     renderProfile();
 }
@@ -822,8 +823,13 @@ async function toggleFavorite() {
 }
 
 function refreshAvatar() {
-    byId('kitchen-avatar').src = `/api/kitchen/avatar?v=${Date.now()}`;
+    kitchenAvatar.src = `/api/kitchen/avatar?v=${Date.now()}`;
 }
+
+kitchenAvatar.addEventListener('error', () => {
+    const source = kitchenAvatar.getAttribute('src');
+    if (source && source !== defaultKitchenAvatar) kitchenAvatar.src = defaultKitchenAvatar;
+});
 
 async function saveAvatar(event) {
     event.preventDefault();

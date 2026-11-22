@@ -35,7 +35,7 @@ class KitchenSite {
     }
 
     boolean publicAvatar() {
-        return mode == Mode.PORTFOLIO;
+        return !privateMode();
     }
 
     String language() {

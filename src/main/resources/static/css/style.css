@@ -868,6 +868,50 @@ button:disabled { cursor: default; }
     padding: 0 16px 12px;
 }
 .order-management-actions .danger { color: #852e48; }
+@media (min-width: 900px) {
+    :root[data-order-management="true"] .order-view { width: min(1000px, 100%); }
+    :root[data-order-management="true"] .order-login-card {
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 15px 22px;
+    }
+
+    .editable-order {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "heading actions" "items items";
+    }
+    .editable-order .receipt-heading {
+        grid-area: heading;
+        align-items: center;
+        gap: 16px;
+        min-height: 60px;
+        padding-block: 12px;
+    }
+    .editable-order .receipt-identity {
+        display: flex;
+        align-items: center;
+        gap: clamp(12px, 2vw, 24px);
+    }
+    .editable-order .receipt-identity h3,
+    .editable-order .receipt-time { flex-shrink: 0; white-space: nowrap; }
+    .editable-order :is(.receipt-time, .receipt-orderer) { margin-top: 0; }
+    .editable-order .receipt-total { justify-self: end; }
+    .editable-order .order-management-actions {
+        grid-area: actions;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-left: -6px;
+        padding: 10px 20px 10px 0;
+        border-bottom: 1px solid var(--line);
+    }
+    .editable-order .receipt-items { grid-area: items; padding-block: 10px 13px; }
+}
+
 .order-editor { display: flex; flex-direction: column; min-height: 0; }
 #order-editor-lines { list-style: none; margin-bottom: 14px; }
 .order-editor-line {

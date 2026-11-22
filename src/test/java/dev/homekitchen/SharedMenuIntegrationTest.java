@@ -26,6 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -58,7 +59,14 @@ class SharedMenuIntegrationTest {
         mvc.perform(get("/api/dishes/1/image")).andExpect(status().isOk())
                 .andExpect(content().bytes(photo));
         mvc.perform(head("/api/dishes/1/image")).andExpect(status().isOk());
-        mvc.perform(get("/api/kitchen/avatar")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/kitchen/avatar")).andExpect(status().isFound())
+                .andExpect(header().string("Location", "/images/kitchen-avatar.jpg"));
+        jdbc.update("insert into kitchen_avatar (id, image_data, media_type) values (1, ?, 'image/jpeg')", photo);
+        mvc.perform(get("/api/kitchen/avatar")).andExpect(status().isOk()).andExpect(content().bytes(photo));
+        mvc.perform(head("/api/kitchen/avatar")).andExpect(status().isOk());
+        mvc.perform(delete("/api/admin/avatar").with(csrf())).andExpect(status().isUnauthorized());
+        mvc.perform(delete("/api/admin/avatar").with(csrf()).with(user("guest"))).andExpect(status().isForbidden());
+        mvc.perform(put("/api/admin/avatar").with(csrf()).with(user("guest"))).andExpect(status().isForbidden());
     }
 
     @Test
