@@ -7,12 +7,17 @@ const text = (chinese, english) => language === 'en-US' ? english : chinese;
 const byId = id => document.getElementById(id);
 const maxPerDish = 3;
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
-const categories = document.querySelectorAll('[data-category]');
+const categories = new Map([...document.querySelectorAll('[data-category]')]
+    .map(button => [button.dataset.category, button]));
+const defaultCategory = categories.keys().next().value;
 const tabs = document.querySelectorAll('[data-view]');
 const views = document.querySelectorAll('main[id]');
 const dialog = byId('dish-modal');
 const orderTime = new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' });
 const recipeSplit = matchMedia('(min-width: 850px)');
+const mobileLayout = matchMedia('(max-width: 699px)');
+const cartButton = byId('cart-button');
+const app = byId('app-wrapper');
 const cart = new Map();
 const dishPhotoVersions = new Map();
 const statusLabels = { PLACED: text('已下单', 'Placed'), PREPARING: text('制作中', 'Preparing'), COMPLETED: text('已完成', 'Completed') };
@@ -27,12 +32,14 @@ const legacyDemoNames = new Map(Object.entries({
 const nextStatus = { PLACED: 'PREPARING', PREPARING: 'COMPLETED' };
 
 let dishes = [];
-let currentCategory = 'All';
+let currentCategory = defaultCategory;
 let submitting = false;
 let session;
 let recipeDish;
 let recipeMenuPosition;
-let pointerStartedOnBackdrop = false;
+let backdropStart;
+let cartDrag;
+let suppressCartClick = false;
 let registering = false;
 let returnToCart = false;
 let toastTimer;
@@ -149,9 +156,10 @@ function updateCart(dish, delta, event) {
 
 function renderCategory() {
     const favorites = new Set(session?.user?.favorites);
-    const visible = dishes.filter(dish => currentCategory === 'All' || dish.category === currentCategory);
+    const visible = dishes.filter(dish => dish.category === currentCategory);
     visible.sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)));
     const list = byId('full-dish-list');
+    byId('category-heading').textContent = categories.get(currentCategory).textContent;
     const count = byId('menu-count');
     count.textContent = text(`${visible.length} 道菜品`, `${visible.length} ${visible.length === 1 ? 'dish' : 'dishes'}`);
     count.hidden = false;
@@ -220,7 +228,8 @@ function openDishDetails(dish) {
     const photo = byId('modal-img');
     photo.src = dishPhotoPath(dish) ?? '/images/kitchen-avatar.jpg';
     photo.alt = dish.imagePath ? dish.name : '';
-    byId('modal-title').textContent = dish.name;
+    const title = byId('modal-title');
+    title.textContent = dish.name;
     byId('modal-price').textContent = money.format(dish.price);
     byId('modal-description').textContent = dish.description;
 
@@ -234,7 +243,10 @@ function openDishDetails(dish) {
     byId('modal-steps').replaceChildren(...recipe.steps.map(step => element('li', 'read-s-row', step)));
     byId('modal-tips').textContent = recipe.tips ?? '';
     byId('modal-tips-area').hidden = !recipe.tips;
+    title.toggleAttribute('autofocus', mobileLayout.matches);
+    dialog.querySelector('.close-icon').toggleAttribute('autofocus', !mobileLayout.matches);
     if (!dialog.open) dialog.showModal();
+    if (mobileLayout.matches) title.focus({ preventScroll: true });
     updateRecipeScrollTarget();
     byId('recipe-view').scrollTop = 0;
     byId('recipe-content').scrollTop = 0;
@@ -258,7 +270,7 @@ function renderCart() {
     }
     if (!count) list.append(element('p', 'empty', text('购物车空空如也。', 'Your cart is empty.')));
     byId('cart-badge').textContent = count;
-    byId('cart-button').setAttribute('aria-label', text(`打开购物车（${count} 份）`, `Open cart (${count} ${count === 1 ? 'item' : 'items'})`));
+    cartButton.setAttribute('aria-label', text(`打开购物车（${count} 份）`, `Open cart (${count} ${count === 1 ? 'item' : 'items'})`));
     byId('cart-total').textContent = money.format(cents / 100);
     byId('place-order').disabled = !count || submitting;
 }
@@ -375,6 +387,7 @@ function refreshOrders() {
 
 function switchTab(activeView) {
     if (privateMode && !session?.user) activeView = 'view-profile';
+    app.dataset.activeView = activeView;
     for (const view of views) view.hidden = view.id !== activeView;
     for (const tab of tabs) {
         const active = tab.dataset.view === activeView;
@@ -387,19 +400,45 @@ function switchTab(activeView) {
     if (activeView === 'view-profile') renderProfile();
 }
 
-for (const category of categories) {
-    category.setAttribute('aria-pressed', String(category.classList.contains('active')));
-    category.addEventListener('click', () => activateCategory(category.dataset.category));
+for (const [category, control] of categories) {
+    control.addEventListener('click', () => activateCategory(category));
 }
 for (const tab of tabs) tab.addEventListener('click', () => switchTab(tab.dataset.view));
-byId('cart-button').addEventListener('click', () => {
+
+cartButton.addEventListener('pointerdown', event => {
+    if (!event.isPrimary || event.button !== 0) return;
+    suppressCartClick = false;
+    if (!mobileLayout.matches || app.dataset.activeView !== 'view-menu') return;
+    const bounds = cartButton.getBoundingClientRect();
+    cartDrag = { id: event.pointerId, x: event.clientX, y: event.clientY, left: bounds.left, top: bounds.top };
+    cartButton.setPointerCapture(event.pointerId);
+});
+cartButton.addEventListener('pointermove', event => {
+    if (event.pointerId !== cartDrag?.id) return;
+    const dx = event.clientX - cartDrag.x;
+    const dy = event.clientY - cartDrag.y;
+    if (!suppressCartClick && Math.hypot(dx, dy) < 7) return;
+    suppressCartClick = true;
+    cartButton.style.setProperty('--cart-x', `${cartDrag.left + dx}px`);
+    cartButton.style.setProperty('--cart-y', `${cartDrag.top + dy}px`);
+    cartButton.classList.add('is-positioned');
+});
+cartButton.addEventListener('lostpointercapture', event => {
+    if (event.pointerId === cartDrag?.id) cartDrag = undefined;
+});
+cartButton.addEventListener('click', event => {
+    if (event.detail !== 0 && suppressCartClick) {
+        suppressCartClick = false;
+        return;
+    }
     switchTab('view-cart');
     byId('back-to-menu').focus();
 });
 byId('back-to-menu').addEventListener('click', () => {
     switchTab('view-menu');
-    byId('cart-button').focus();
+    cartButton.focus();
 });
+
 dialog.querySelector('.close-icon').addEventListener('click', () => dialog.close());
 function isBackdrop(event) {
     if (event.target !== dialog) return false;
@@ -408,13 +447,29 @@ function isBackdrop(event) {
         event.clientY < bounds.top || event.clientY >= bounds.bottom;
 }
 
+function mobileRecipeOpen() {
+    return mobileLayout.matches && dialog.classList.contains('recipe-mode');
+}
+
 dialog.addEventListener('pointerdown', event => {
-    pointerStartedOnBackdrop = event.isPrimary && event.button === 0 && isBackdrop(event);
+    if (!event.isPrimary) return;
+    backdropStart = event.button === 0 && isBackdrop(event)
+        ? { id: event.pointerId, x: event.clientX, y: event.clientY }
+        : undefined;
 });
-dialog.addEventListener('pointercancel', () => { pointerStartedOnBackdrop = false; });
+dialog.addEventListener('pointercancel', () => { backdropStart = undefined; });
+dialog.addEventListener('pointerup', event => {
+    if (!mobileRecipeOpen() || event.pointerId !== backdropStart?.id) return;
+    const start = backdropStart;
+    backdropStart = undefined;
+    if (isBackdrop(event) && Math.hypot(event.clientX - start.x, event.clientY - start.y) < 10) {
+        event.preventDefault();
+        dialog.close();
+    }
+});
 dialog.addEventListener('click', event => {
-    if (pointerStartedOnBackdrop && isBackdrop(event)) dialog.close();
-    pointerStartedOnBackdrop = false;
+    if (!mobileRecipeOpen() && backdropStart && isBackdrop(event)) dialog.close();
+    backdropStart = undefined;
 });
 byId('place-order').addEventListener('click', placeOrder);
 
@@ -697,7 +752,7 @@ function openEditor(dish) {
     editor.reset();
     editorError();
     editor.elements.name.value = dish?.name ?? '';
-    editor.elements.category.value = dish?.category ?? (currentCategory === 'All' ? 'Chinese' : currentCategory);
+    editor.elements.category.value = dish?.category ?? currentCategory;
     editor.elements.price.value = dish?.price ?? '';
     editor.elements.description.value = dish?.description ?? '';
     editor.elements.available.checked = dish?.available ?? true;
@@ -912,9 +967,9 @@ async function deleteDish() {
 }
 
 function activateCategory(category) {
-    currentCategory = category;
-    for (const item of categories) {
-        const active = item.dataset.category === category;
+    currentCategory = categories.has(category) ? category : defaultCategory;
+    for (const [value, item] of categories) {
+        const active = value === currentCategory;
         item.classList.toggle('active', active);
         item.setAttribute('aria-pressed', String(active));
     }
@@ -948,7 +1003,7 @@ byId('delete-dish').addEventListener('click', deleteDish);
 editor.addEventListener('submit', saveDish);
 dialog.addEventListener('close', () => {
     resetPhotoSelection();
-    pointerStartedOnBackdrop = false;
+    backdropStart = undefined;
     if (dialog.classList.contains('recipe-mode') && recipeMenuPosition?.category === currentCategory &&
             !byId('view-menu').hidden) {
         const scroller = document.querySelector('.menu-scroll');
@@ -959,7 +1014,8 @@ dialog.addEventListener('close', () => {
 });
 
 byId('toggle-register').hidden = !registrationOpen;
-if (privateMode) switchTab('view-profile');
+switchTab('view-menu');
+activateCategory(defaultCategory);
 renderCart();
 loadSession().then(() => {
     if (!privateMode || session.user) {

@@ -8,7 +8,7 @@
     <script defer src="/js/main.js"></script>
 </head>
 <body>
-    <div id="app-wrapper">
+    <div id="app-wrapper" data-active-view="view-menu">
         <header class="header">
             <div class="header-shell">
                 <div class="brand">
@@ -21,7 +21,7 @@
                     <button class="nav-item" type="button" data-view="view-profile">{{profile}}</button>
                 </nav>
                 <button class="cart-button" id="cart-button" type="button" aria-label="{{emptyCartLabel}}">
-                    <span aria-hidden="true">{{cart}}</span><span class="cart-badge" id="cart-badge" aria-hidden="true">0</span>
+                    <span class="cart-label" aria-hidden="true">{{cart}}</span><span class="cart-icon" aria-hidden="true">🛒</span><span class="cart-badge" id="cart-badge" aria-hidden="true">0</span>
                 </button>
             </div>
         </header>
@@ -38,13 +38,15 @@
                         <button class="add-dish" id="add-dish" type="button" hidden>{{addDish}}</button>
                     </div>
                     <nav class="cuisine-nav" aria-label="{{cuisines}}">
-                        <button class="cuisine-item active" type="button" data-category="All">{{all}}</button>
-                        <button class="cuisine-item" type="button" data-category="Chinese">{{chinese}}</button>
+                        <button class="cuisine-item active" type="button" data-category="Chinese">{{chinese}}</button>
                         <button class="cuisine-item" type="button" data-category="Western">{{western}}</button>
                         <button class="cuisine-item" type="button" data-category="Japanese">{{japanese}}</button>
                         <button class="cuisine-item" type="button" data-category="Dessert">{{dessert}}</button>
                     </nav>
-                    <div id="full-dish-list" class="dish-grid">{{loading}}</div>
+                    <div class="category-panel">
+                        <h3 id="category-heading" class="category-heading"></h3>
+                        <div id="full-dish-list" class="dish-grid">{{loading}}</div>
+                    </div>
                 </section>
             </div>
         </main>
@@ -152,7 +154,7 @@
             <figure class="recipe-photo"><img class="modal-img" id="modal-img" alt=""></figure>
             <div class="modal-body" id="recipe-content" tabindex="-1" aria-label="{{recipeContent}}">
                 <div class="recipe-heading">
-                    <h2 id="modal-title"></h2>
+                    <h2 id="modal-title" tabindex="-1"></h2>
                     <div class="recipe-actions">
                         <button id="favorite-dish" type="button" class="secondary-btn" hidden></button>
                         <button id="edit-dish" type="button" class="secondary-btn" hidden>{{editRecipe}}</button>
