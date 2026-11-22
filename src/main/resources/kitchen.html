@@ -87,7 +87,7 @@
                         <div class="profile-header-area">
                             <div>
                                 <h3 id="profile-nickname"></h3>
-                                <p class="profile-username-line"><span lang="en">Username</span> <span id="profile-username"></span></p>
+                                <p class="profile-username-line"><span id="profile-username"></span></p>
                             </div>
                             <span id="profile-role" class="account-role"></span>
                         </div>
@@ -185,6 +185,7 @@
                     <label>{{description}}<textarea name="description" rows="2" maxlength="240"></textarea></label>
                     <label class="checkbox-row"><input name="available" type="checkbox">{{available}}</label>
                     <label>{{photo}}<input name="photo" type="file" accept="image/jpeg,image/png"></label>
+                    <p id="photo-status" role="status" hidden>{{compressingPhoto}}</p>
                     <img id="editor-photo" alt="{{photoPreview}}" hidden>
                     <button id="remove-photo" type="button" class="secondary-btn" hidden>{{removePhoto}}</button>
                     <fieldset><legend>{{ingredientsAmounts}}</legend>
@@ -200,7 +201,7 @@
             </div>
             <div class="modal-footer editor-footer">
                 <button id="delete-dish" type="button" class="secondary-btn danger" hidden>{{deleteDish}}</button>
-                <button class="primary-btn">{{saveDish}}</button>
+                <button id="save-dish" class="primary-btn">{{saveDish}}</button>
             </div>
         </form>
     </dialog>

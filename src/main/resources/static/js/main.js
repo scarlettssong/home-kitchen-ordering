@@ -14,6 +14,7 @@ const dialog = byId('dish-modal');
 const orderTime = new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' });
 const recipeSplit = matchMedia('(min-width: 850px)');
 const cart = new Map();
+const dishPhotoVersions = new Map();
 const statusLabels = { PLACED: text('已下单', 'Placed'), PREPARING: text('制作中', 'Preparing'), COMPLETED: text('已完成', 'Completed') };
 const legacyDemoNames = new Map(Object.entries({
     姜葱香米饭: 'Ginger Scallion Rice',
@@ -37,6 +38,13 @@ let returnToCart = false;
 let toastTimer;
 
 const isAdmin = () => session?.user?.role === 'ADMIN';
+
+function dishPhotoPath(dish) {
+    const path = dish?.imagePath;
+    const version = dishPhotoVersions.get(dish?.id);
+    if (!path || !version) return path;
+    return `${path}${path.includes('?') ? '&' : '?'}v=${version}`;
+}
 
 function element(tag, className, content) {
     const node = document.createElement(tag);
@@ -148,7 +156,7 @@ function renderCategory() {
         link.setAttribute('aria-label', text(`查看${dish.name}菜谱`, `View recipe for ${dish.name}`));
         link.dataset.dishId = dish.id;
         const photo = element('img', 'dish-img');
-        photo.src = dish.imagePath ?? '/images/kitchen-avatar.jpg';
+        photo.src = dishPhotoPath(dish) ?? '/images/kitchen-avatar.jpg';
         photo.alt = '';
         const thumbnail = element('span', 'dish-thumbnail');
         thumbnail.append(photo);
@@ -203,7 +211,7 @@ function openDishDetails(dish) {
     dialog.setAttribute('aria-labelledby', 'modal-title');
     renderRecipeActions();
     const photo = byId('modal-img');
-    photo.src = dish.imagePath ?? '/images/kitchen-avatar.jpg';
+    photo.src = dishPhotoPath(dish) ?? '/images/kitchen-avatar.jpg';
     photo.alt = dish.imagePath ? dish.name : '';
     byId('modal-title').textContent = dish.name;
     byId('modal-price').textContent = money.format(dish.price);
@@ -623,9 +631,29 @@ async function resetAvatar() {
 }
 
 const editor = byId('dish-editor');
+const dishSaveButton = byId('save-dish');
+const maxImageBytes = 1024 * 1024;
+const maxImageSide = 4096;
 let editingId;
 let removePhoto = false;
 let previewUrl;
+let selectedPhoto;
+let photoSelection = 0;
+let preparingPhoto = false;
+let savingDish = false;
+
+function setPreparingPhoto(preparing, compressing = false) {
+    preparingPhoto = preparing;
+    byId('photo-status').hidden = !compressing;
+    dishSaveButton.disabled = preparingPhoto || savingDish;
+}
+
+function resetPhotoSelection() {
+    photoSelection++;
+    selectedPhoto = undefined;
+    clearPreviewUrl();
+    setPreparingPhoto(false);
+}
 
 function editorError(message = '') {
     const error = byId('editor-error');
@@ -651,7 +679,7 @@ function openEditor(dish) {
     editingId = dish?.id;
     dialog.classList.remove('recipe-mode');
     removePhoto = false;
-    clearPreviewUrl();
+    resetPhotoSelection();
     editor.reset();
     editorError();
     editor.elements.name.value = dish?.name ?? '';
@@ -660,7 +688,7 @@ function openEditor(dish) {
     editor.elements.description.value = dish?.description ?? '';
     editor.elements.available.checked = dish?.available ?? true;
     editor.elements.tips.value = dish?.recipe.tips ?? '';
-    showPhotoPreview(dish?.imagePath);
+    showPhotoPreview(dishPhotoPath(dish));
 
     byId('editable-ingredients').replaceChildren();
     byId('editable-steps').replaceChildren();
@@ -709,31 +737,105 @@ function addStep(step = '') {
     return input;
 }
 
-function validatePhoto(photo) {
-    if (photo.size > 1024 * 1024) throw new Error(text('图片不能超过 1 MB。', 'Images must be 1 MB or smaller.'));
-    if (!['image/jpeg', 'image/png'].includes(photo.type)) throw new Error(text('请选择 JPEG 或 PNG 图片。', 'Choose a JPEG or PNG image.'));
+function validatePhotoType(photo) {
+    if (!['image/jpeg', 'image/png'].includes(photo.type)) {
+        throw new Error(text('请选择 JPEG 或 PNG 图片。', 'Choose a JPEG or PNG image.'));
+    }
 }
 
-function selectDishPhoto(event) {
-    const field = event.currentTarget;
-    if (!field.files.length) return;
+function validatePhoto(photo) {
+    if (photo.size > maxImageBytes) {
+        throw new Error(text('图片不能超过 1 MB。', 'Images must be 1 MB or smaller.'));
+    }
+    validatePhotoType(photo);
+}
+
+async function prepareDishPhoto(file) {
+    validatePhotoType(file);
+    let image;
     try {
-        validatePhoto(field.files[0]);
+        image = await createImageBitmap(file);
+    } catch {
+        throw new Error(text('无法读取这张图片，请选择可正常打开的 JPEG 或 PNG 图片。',
+            'Could not read this image. Choose a JPEG or PNG that opens normally.'));
+    }
+
+    try {
+        const longSide = Math.max(image.width, image.height);
+        if (file.size <= maxImageBytes) {
+            if (longSide > maxImageSide) {
+                throw new Error(text('图片长宽不能超过 4096 像素。', 'Image dimensions must be at most 4096 pixels.'));
+            }
+            return file;
+        }
+
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        const qualities = file.type === 'image/jpeg' ? [0.92, 0.82, 0.72] : [undefined];
+        let targetSide = Math.min(longSide, maxImageSide);
+        const minSide = Math.min(targetSide, 320);
+        try {
+            while (context) {
+                const scale = targetSide / longSide;
+                canvas.width = Math.max(1, Math.round(image.width * scale));
+                canvas.height = Math.max(1, Math.round(image.height * scale));
+                context.imageSmoothingQuality = 'high';
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+                let lastSize = 0;
+                for (const quality of qualities) {
+                    const compressed = await new Promise(resolve => canvas.toBlob(resolve, file.type, quality));
+                    if (!compressed || compressed.type !== file.type) break;
+                    if (compressed.size <= maxImageBytes) {
+                        return new File([compressed], file.name, { type: file.type });
+                    }
+                    lastSize = compressed.size;
+                }
+                if (!lastSize || targetSide === minSide) break;
+
+                const shrink = Math.max(0.5, Math.min(0.88, 0.94 * Math.sqrt(maxImageBytes / lastSize)));
+                targetSide = Math.max(minSide, Math.floor(targetSide * shrink));
+            }
+        } catch {
+            // Canvas encoding can fail on devices with limited image memory.
+        } finally {
+            canvas.width = canvas.height = 0;
+        }
+        throw new Error(text('无法将这张图片压缩到 1 MB 以内，请选择较小的 JPEG 或 PNG 图片。',
+            'Could not compress this image to 1 MB. Choose a smaller JPEG or PNG.'));
+    } finally {
+        image.close();
+    }
+}
+
+async function selectDishPhoto(event) {
+    const field = event.currentTarget;
+    const file = field.files[0];
+    if (!file) return;
+    const selection = ++photoSelection;
+    editorError();
+    setPreparingPhoto(true, file.size > maxImageBytes);
+    try {
+        const photo = await prepareDishPhoto(file);
+        if (selection !== photoSelection || !dialog.open) return;
+        const url = URL.createObjectURL(photo);
         clearPreviewUrl();
-        previewUrl = URL.createObjectURL(field.files[0]);
+        previewUrl = url;
+        selectedPhoto = photo;
         showPhotoPreview(previewUrl);
         removePhoto = false;
-        editorError();
     } catch (error) {
+        if (selection !== photoSelection || !dialog.open) return;
         field.value = '';
-        clearPreviewUrl();
-        showPhotoPreview(removePhoto ? null : dishes.find(dish => dish.id === editingId)?.imagePath);
         editorError(error.message);
+    } finally {
+        if (selection === photoSelection) setPreparingPhoto(false);
     }
 }
 
 async function saveDish(event) {
     event.preventDefault();
+    if (preparingPhoto || savingDish) return;
     editorError();
     const fields = editor.elements;
     const ingredients = [...byId('editable-ingredients').children].map(row => {
@@ -758,14 +860,16 @@ async function saveDish(event) {
     }
     const payload = new FormData();
     payload.append('dish', new Blob([JSON.stringify(data)], { type: 'application/json' }));
-    if (fields.photo.files.length) payload.append('image', fields.photo.files[0]);
+    const replacingPhoto = Boolean(selectedPhoto);
+    if (replacingPhoto) payload.append('image', selectedPhoto);
 
-    const save = editor.querySelector('button[type="submit"], .editor-footer .primary-btn');
-    save.disabled = true;
+    savingDish = true;
+    dishSaveButton.disabled = true;
     try {
-        await request(editingId ? `/api/admin/dishes/${editingId}` : '/api/admin/dishes', {
+        const saved = await request(editingId ? `/api/admin/dishes/${editingId}` : '/api/admin/dishes', {
             method: editingId ? 'PUT' : 'POST', body: payload
         });
+        if (replacingPhoto) dishPhotoVersions.set(saved.id, Date.now());
         dialog.close();
         activateCategory(data.category);
         await loadDishesFromServer();
@@ -774,7 +878,8 @@ async function saveDish(event) {
         if (dialog.open) editorError(error.message);
         else showNotice(error.message, true);
     } finally {
-        save.disabled = false;
+        savingDish = false;
+        dishSaveButton.disabled = preparingPhoto;
     }
 }
 
@@ -782,6 +887,7 @@ async function deleteDish() {
     if (!window.confirm(text('删除这道菜？已下单的订单会保留原菜名与价格。', 'Delete this dish? Existing orders will keep its original name and price.'))) return;
     try {
         await request(`/api/admin/dishes/${editingId}`, { method: 'DELETE' });
+        dishPhotoVersions.delete(editingId);
         dialog.close();
         await loadDishesFromServer();
         showNotice(text('菜品已删除。', 'Dish deleted.'));
@@ -820,14 +926,14 @@ byId('add-step').addEventListener('click', () => addStep().focus());
 editor.elements.photo.addEventListener('change', selectDishPhoto);
 byId('remove-photo').addEventListener('click', () => {
     editor.elements.photo.value = '';
-    clearPreviewUrl();
+    resetPhotoSelection();
     removePhoto = true;
     showPhotoPreview(null);
 });
 byId('delete-dish').addEventListener('click', deleteDish);
 editor.addEventListener('submit', saveDish);
 dialog.addEventListener('close', () => {
-    clearPreviewUrl();
+    resetPhotoSelection();
     pointerStartedOnBackdrop = false;
     if (dialog.classList.contains('recipe-mode') && recipeMenuPosition?.category === currentCategory &&
             !byId('view-menu').hidden) {
