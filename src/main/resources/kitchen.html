@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{language}}" data-private="{{privateMode}}" data-registration-open="{{registrationOpen}}" data-public-avatar="{{publicAvatar}}">
+<html lang="{{language}}" data-private="{{privateMode}}" data-registration-open="{{registrationOpen}}" data-public-avatar="{{publicAvatar}}" data-password-changes="{{passwordChanges}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -91,11 +91,21 @@
                             </div>
                             <span id="profile-role" class="account-role"></span>
                         </div>
-                        <details class="nickname-settings">
+                        <details class="account-settings">
                             <summary>{{editNickname}}</summary>
                             <form id="nickname-form" class="form-fields">
                                 <label>{{newNickname}}<input name="nickname" required maxlength="60"></label>
                                 <button class="primary-btn">{{saveNickname}}</button>
+                            </form>
+                        </details>
+                        <details id="password-settings" class="account-settings" hidden>
+                            <summary>{{changePassword}}</summary>
+                            <form id="password-form" class="form-fields">
+                                <p id="password-error" class="form-error" role="alert" hidden></p>
+                                <label>{{currentPassword}}<input name="currentPassword" type="password" autocomplete="current-password" required maxlength="72"></label>
+                                <label>{{newPassword}}<input name="newPassword" type="password" autocomplete="new-password" required maxlength="72"></label>
+                                <label>{{confirmPassword}}<input name="confirmPassword" type="password" autocomplete="new-password" required maxlength="72"></label>
+                                <button class="primary-btn">{{savePassword}}</button>
                             </form>
                         </details>
                         <button id="logout" type="button" class="secondary-btn logout-button">{{logout}}</button>

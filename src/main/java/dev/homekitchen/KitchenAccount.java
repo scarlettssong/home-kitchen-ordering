@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -42,4 +43,12 @@ interface AccountRepository extends JpaRepository<KitchenAccount, Long> {
             where lower(username collate "C") = lower(:username collate "C")
             """, nativeQuery = true)
     Optional<KitchenAccount> findByLoginName(@Param("username") String username);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update KitchenAccount account set account.passwordHash = :replacement
+            where account.id = :id and account.passwordHash = :currentHash
+            """)
+    int replacePassword(@Param("id") long id, @Param("currentHash") String currentHash,
+                        @Param("replacement") String replacement);
 }

@@ -32,6 +32,9 @@ class SecurityConfiguration {
                     } else {
                         rules.requestMatchers(HttpMethod.POST, "/api/register").denyAll();
                     }
+                    if (site.sharedMenu()) {
+                        rules.requestMatchers(HttpMethod.PATCH, "/api/profile/password").authenticated();
+                    }
                     if (site.publicAvatar()) {
                         rules.requestMatchers(HttpMethod.GET, "/api/kitchen/avatar").permitAll()
                                 .requestMatchers(HttpMethod.HEAD, "/api/kitchen/avatar").permitAll();

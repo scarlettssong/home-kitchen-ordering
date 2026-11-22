@@ -26,6 +26,10 @@ class KitchenSite {
         return mode == Mode.PRIVATE;
     }
 
+    boolean sharedMenu() {
+        return mode == Mode.SHARED_MENU;
+    }
+
     boolean registrationOpen() {
         return mode != Mode.PRIVATE;
     }

@@ -510,6 +510,9 @@ async function logout() {
         await request('/api/logout', { method: 'POST' });
         hideToast();
         session = null;
+        byId('password-form').reset();
+        byId('password-error').hidden = true;
+        byId('password-settings').open = false;
         cart.clear();
         byId('order-history-list').replaceChildren();
         renderCategory();
@@ -534,6 +537,27 @@ async function saveNickname(event) {
         showNotice(text('已保存昵称。', 'Nickname saved.'));
     } catch (error) {
         showNotice(error.message, true);
+    }
+}
+
+async function changePassword(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const submit = form.querySelector('button');
+    const alert = byId('password-error');
+    alert.hidden = true;
+    submit.disabled = true;
+    try {
+        await sendJson('/api/profile/password', 'PATCH', Object.fromEntries(new FormData(form)));
+        form.reset();
+        byId('password-settings').open = false;
+        showToast(text('密码已更新', 'Password updated'));
+    } catch (error) {
+        alert.textContent = error.message;
+        alert.hidden = false;
+        form.elements.currentPassword.value = '';
+    } finally {
+        submit.disabled = false;
     }
 }
 
@@ -783,6 +807,8 @@ byId('toggle-register').addEventListener('click', () => setRegistrationMode(regi
 byId('auth-form').addEventListener('submit', submitAuth);
 byId('logout').addEventListener('click', logout);
 byId('nickname-form').addEventListener('submit', saveNickname);
+byId('password-settings').hidden = document.documentElement.dataset.passwordChanges !== 'true';
+byId('password-form').addEventListener('submit', changePassword);
 byId('favorite-dish').addEventListener('click', toggleFavorite);
 byId('avatar-form').addEventListener('submit', saveAvatar);
 byId('reset-avatar').addEventListener('click', resetAvatar);

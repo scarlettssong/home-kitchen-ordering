@@ -20,6 +20,8 @@ import java.util.List;
 
 @Service
 class AccountService implements UserDetailsService {
+    private static final String USERNAME_PATTERN = "[a-zA-Z0-9][a-zA-Z0-9_.-]{2,39}";
+
     private final AccountRepository accounts;
     private final PasswordEncoder passwords;
     private final JdbcTemplate jdbc;
@@ -46,12 +48,41 @@ class AccountService implements UserDetailsService {
 
     void register(String username, String nickname, String password) {
         String name = username.strip();
+        if (site.sharedMenu() && (name.equalsIgnoreCase("Scarlett") || name.equalsIgnoreCase("Cris"))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    site.text("该用户名为店长保留，请使用其他用户名。", "That username is reserved. Choose a different username."));
+        }
+        if (!name.matches(USERNAME_PATTERN)) {
+            throw badRequest("用户名需为 3 到 40 个字符，可使用英文字母、数字、点、下划线和连字符，首字符须为字母或数字。",
+                    "Use 3 to 40 letters, numbers, dots, underscores, or hyphens. Start with a letter or number.");
+        }
         var account = new KitchenAccount(name, nickname == null || nickname.isBlank() ? name : nickname.strip(),
                 passwordHash(password), KitchenAccount.Role.GUEST);
         try {
             accounts.saveAndFlush(account);
         } catch (DataIntegrityViolationException conflict) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, site.text("该用户名已注册。", "That username is already registered."));
+        }
+    }
+
+    @Transactional
+    void changePassword(String username, String current, String replacement, String confirmation) {
+        var account = account(username);
+        if (!validPassword(current) || !passwords.matches(current, account.passwordHash)) {
+            throw badRequest("当前密码不正确。", "The current password is incorrect.");
+        }
+        if (replacement == null || !replacement.equals(confirmation)) {
+            throw badRequest("两次输入的新密码不一致。", "The new passwords do not match.");
+        }
+
+        if (replacement.equals(current)) {
+            throw badRequest("新密码不能与当前密码相同。", "The new password must differ from the current password.");
+        }
+
+        int updated = accounts.replacePassword(account.id, account.passwordHash, passwordHash(replacement));
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    site.text("密码已被更改，请重新确认当前密码。", "The password changed. Check your current password and try again."));
         }
     }
 
@@ -91,8 +122,10 @@ class AccountService implements UserDetailsService {
             @Value("${KITCHEN_GUEST_USERNAME:}") String guestName,
             @Value("${KITCHEN_GUEST_PASSWORD:}") String guestPassword) {
         return args -> {
-            provision(adminName, adminPassword, KitchenAccount.Role.ADMIN,
-                    site.text("小厨房店长", "Kitchen Manager"));
+            if (!site.sharedMenu()) {
+                provision(adminName, adminPassword, KitchenAccount.Role.ADMIN,
+                        site.text("小厨房店长", "Kitchen Manager"));
+            }
             if (site.privateMode()) {
                 provision(guestName, guestPassword, KitchenAccount.Role.GUEST, guestName.strip());
             }
@@ -102,7 +135,7 @@ class AccountService implements UserDetailsService {
     private void provision(String username, String password, KitchenAccount.Role role, String nickname) {
         if (username.isBlank() && password.isEmpty()) return;
         String name = username.strip();
-        if (!name.matches("[a-zA-Z0-9][a-zA-Z0-9_.-]{2,39}")) {
+        if (!name.matches(USERNAME_PATTERN)) {
             throw new IllegalArgumentException("Use a valid username for the " + role + " account");
         }
         jdbc.update("""
@@ -116,11 +149,20 @@ class AccountService implements UserDetailsService {
     }
 
     private String passwordHash(String password) {
-        int length = password.getBytes(StandardCharsets.UTF_8).length;
-        if (length < 8 || length > 72) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, site.text("密码需为 8 到 72 个 UTF-8 字节。", "Use a password between 8 and 72 UTF-8 bytes."));
+        if (!validPassword(password)) {
+            throw badRequest("密码需为 8 到 72 个 UTF-8 字节。", "Use a password between 8 and 72 UTF-8 bytes.");
         }
         return passwords.encode(password);
+    }
+
+    private static boolean validPassword(String password) {
+        if (password == null || password.isBlank() || password.length() > 72) return false;
+        int length = password.getBytes(StandardCharsets.UTF_8).length;
+        return length >= 8 && length <= 72;
+    }
+
+    private ResponseStatusException badRequest(String chinese, String english) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, site.text(chinese, english));
     }
 
     record Profile(String username, String nickname, KitchenAccount.Role role, List<Long> favorites) {}

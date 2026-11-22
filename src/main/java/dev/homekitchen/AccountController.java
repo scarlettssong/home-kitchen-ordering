@@ -2,7 +2,6 @@ package dev.homekitchen;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.web.csrf.CsrfToken;
@@ -45,6 +44,13 @@ class AccountController {
         return accounts.updateNickname(principal.getName(), request.nickname());
     }
 
+    @PatchMapping("/profile/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void changePassword(Principal principal, @RequestBody PasswordChange request) {
+        accounts.changePassword(principal.getName(), request.currentPassword(), request.newPassword(),
+                request.confirmPassword());
+    }
+
     @PutMapping("/favorites/{dishId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void favorite(Principal principal, @PathVariable long dishId) {
@@ -58,7 +64,7 @@ class AccountController {
     }
 
     record Session(AccountService.Profile user, String csrfHeader, String csrfToken) {}
-    record Registration(@NotBlank @Pattern(regexp = "[a-zA-Z0-9][a-zA-Z0-9_.-]{2,39}") String username,
-                        @Size(max = 60) String nickname, @NotBlank @Size(max = 72) String password) {}
+    record Registration(@NotBlank String username, @Size(max = 60) String nickname, String password) {}
+    record PasswordChange(String currentPassword, String newPassword, String confirmPassword) {}
     record Nickname(@NotBlank @Size(max = 60) String nickname) {}
 }

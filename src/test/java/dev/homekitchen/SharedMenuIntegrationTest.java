@@ -1,8 +1,11 @@
 package dev.homekitchen;
 
+import java.util.UUID;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcPrint;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
@@ -29,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.password=${TEST_DB_PASSWORD}",
         "kitchen.mode=shared-menu"
 })
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @Transactional
 class SharedMenuIntegrationTest {
     @Autowired MockMvc mvc;
@@ -66,7 +69,7 @@ class SharedMenuIntegrationTest {
 
     @Test
     void registrationKeepsDisplayCaseAndRejectsASecondAccountWithDifferentCase() throws Exception {
-        String password = java.util.UUID.randomUUID().toString();
+        String password = UUID.randomUUID().toString();
         String registration = """
                 {"username":"CaseFixture","password":"%s","role":"ADMIN"}
                 """.formatted(password);
@@ -85,5 +88,70 @@ class SharedMenuIntegrationTest {
         mvc.perform(post("/api/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(registration.replace("CaseFixture", "CASEFIXTURE")))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void reservedUsernamesRejectCaseAndWhitespaceVariantsBeforeCreatingAnAccount() throws Exception {
+        String password = UUID.randomUUID().toString();
+        for (String name : new String[] {"  sCaRlEtT  ", " cRiS "}) {
+            mvc.perform(post("/api/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"username":"%s","password":"%s","role":"ADMIN"}
+                                    """.formatted(name, password)))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.detail").value("该用户名为店长保留，请使用其他用户名。"));
+        }
+    }
+
+    @Test
+    void guestCanChangeOnlyOwnPasswordAfterVerifyingCurrentPassword() throws Exception {
+        String oldPassword = UUID.randomUUID().toString();
+        String newPassword = UUID.randomUUID().toString();
+        mvc.perform(post("/api/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"PasswordFixture","password":"%s"}
+                                """.formatted(oldPassword)))
+                .andExpect(status().isCreated());
+        String change = """
+                {"username":"AnotherAccount","currentPassword":"%s","newPassword":"%s","confirmPassword":"%s"}
+                """;
+        mvc.perform(patch("/api/profile/password").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(change.formatted(oldPassword, newPassword, newPassword)))
+                .andExpect(status().isUnauthorized());
+
+        String otherPassword = UUID.randomUUID().toString();
+        mvc.perform(post("/api/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"AnotherAccount","password":"%s"}
+                                """.formatted(otherPassword)))
+                .andExpect(status().isCreated());
+        var guest = mvc.perform(post("/api/login").with(csrf()).param("username", "passwordfixture")
+                        .param("password", oldPassword))
+                .andExpect(status().isNoContent()).andReturn();
+        var session = (MockHttpSession) guest.getRequest().getSession(false);
+        mvc.perform(patch("/api/profile/password").session(session).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(change.formatted(UUID.randomUUID(), newPassword, newPassword)))
+                .andExpect(status().isBadRequest());
+        mvc.perform(patch("/api/profile/password").session(session).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(change.formatted(oldPassword, newPassword, "different-confirmation")))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/login").with(csrf()).param("username", "passwordfixture")
+                        .param("password", oldPassword)).andExpect(status().isNoContent());
+        mvc.perform(patch("/api/profile/password").session(session).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(change.formatted(oldPassword, newPassword, newPassword)))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/login").with(csrf()).param("username", "passwordfixture")
+                        .param("password", oldPassword)).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/login").with(csrf()).param("username", "anotheraccount")
+                        .param("password", otherPassword)).andExpect(status().isNoContent());
+        var renewed = mvc.perform(post("/api/login").with(csrf()).param("username", "passwordfixture")
+                        .param("password", newPassword))
+                .andExpect(status().isNoContent()).andReturn();
+        var renewedSession = (MockHttpSession) renewed.getRequest().getSession(false);
+        mvc.perform(get("/api/session").session(renewedSession))
+                .andExpect(jsonPath("$.user.role").value("GUEST"));
+        mvc.perform(post("/api/admin/dishes").session(renewedSession).with(csrf()))
+                .andExpect(status().isForbidden());
     }
 }
