@@ -14,13 +14,16 @@ import javax.imageio.ImageIO;
 import javax.imageio.stream.MemoryCacheImageInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
 class MenuAdminService {
     private static final int MAX_IMAGE_BYTES = 1024 * 1024;
+    private static final BigDecimal MAX_PRICE = new BigDecimal("99999999.99");
 
     private final MenuRepository menu;
     private final JdbcTemplate jdbc;
@@ -32,19 +35,34 @@ class MenuAdminService {
         this.site = site;
     }
 
+    @Transactional(readOnly = true)
+    MenuAdminController.EditableDish editableDish(long id) {
+        var dish = menu.findById(id).orElseThrow(this::dishNotFound);
+        return new MenuAdminController.EditableDish(dish.id, dish.name, dish.category, dish.subcategory,
+                dish.description, dish.icon, dish.automaticPrice ? null : dish.price, dish.price,
+                dish.available, dish.imagePath, dish.recipe);
+    }
+
     @Transactional
     long save(Long id, MenuAdminController.DishEdit edit, MultipartFile file) {
-        var image = file == null ? null : readImage(file);
         var dish = id == null ? new MenuItem() : menu.findById(id).orElseThrow(this::dishNotFound);
+        if (edit.subcategory() != null && !"Chinese".equals(edit.category())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    site.text("只有中餐可以选择分组。", "Only Chinese dishes can have a subcategory."));
+        }
+        var price = effectivePrice(edit);
+        var image = file == null ? null : readImage(file);
         dish.name = edit.name().strip();
         dish.category = edit.category();
-        dish.price = edit.price();
+        dish.subcategory = edit.subcategory();
+        dish.price = price;
+        dish.automaticPrice = edit.price() == null;
         dish.description = edit.description() == null ? "" : edit.description().strip();
         dish.icon = "";
         dish.available = edit.available();
         dish.recipe = new MenuItem.Recipe(edit.ingredients().stream()
                 .map(item -> new MenuItem.Ingredient(item.name().strip(),
-                        item.amount() == null ? "" : item.amount().strip()))
+                        item.amount() == null ? "" : item.amount().strip(), item.cost()))
                 .toList(), edit.steps().stream().map(String::strip).toList(),
                 edit.tips() == null ? "" : edit.tips().strip());
         menu.saveAndFlush(dish);
@@ -58,6 +76,21 @@ class MenuAdminService {
             jdbc.update("update menu_item set image_data = null, image_media_type = null where id = ?", dish.id);
         }
         return dish.id;
+    }
+
+    private BigDecimal effectivePrice(MenuAdminController.DishEdit edit) {
+        if (edit.price() != null) return edit.price();
+        var total = edit.ingredients().stream()
+                .map(MenuAdminController.IngredientEdit::cost)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal::add)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        site.text("请输入菜品价格或至少一项食材成本。", "Enter a dish price or at least one ingredient cost.")));
+        if (total.compareTo(MAX_PRICE) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    site.text("食材成本合计不能超过 99999999.99。", "The total ingredient cost cannot exceed 99999999.99."));
+        }
+        return total;
     }
 
     @Transactional

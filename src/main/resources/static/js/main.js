@@ -10,8 +10,15 @@ const kitchenAvatar = byId('kitchen-avatar');
 const defaultKitchenAvatar = '/images/kitchen-avatar.jpg';
 const maxPerDish = 3;
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+byId('view-menu').querySelector('[data-category="Thai"]').hidden = !orderManagement;
 const categories = new Map([...document.querySelectorAll('[data-category]')]
+    .filter(button => !button.hidden)
     .map(button => [button.dataset.category, button]));
+const subcategories = new Map([
+    ['Staple', text('主食', 'Staples')], ['Vegetables', text('蔬菜', 'Vegetables')],
+    ['Beef', text('牛肉', 'Beef')], ['Chicken', text('鸡肉', 'Chicken')], ['Pork', text('猪肉', 'Pork')]
+]);
+const subcategoryFilters = byId('subcategory-filters');
 const defaultCategory = categories.keys().next().value;
 const tabs = document.querySelectorAll('[data-view]');
 const views = [...document.querySelectorAll('main[id]')];
@@ -38,6 +45,7 @@ const nextStatus = { PLACED: 'PREPARING', PREPARING: 'COMPLETED' };
 
 let dishes = [];
 let currentCategory = defaultCategory;
+let currentSubcategory = '';
 let submitting = false;
 let session;
 let recipeDish;
@@ -263,10 +271,14 @@ function updateCart(dish, delta, event) {
 
 function renderCategory() {
     const favorites = new Set(session?.user?.favorites);
-    const visible = dishes.filter(dish => dish.category === currentCategory);
+    const visible = dishes.filter(dish => dish.category === currentCategory &&
+        (!currentSubcategory || dish.subcategory === currentSubcategory));
     visible.sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)));
     const list = byId('full-dish-list');
-    byId('category-heading').textContent = currentCategory;
+    const heading = byId('category-heading');
+    heading.textContent = currentCategory;
+    subcategoryFilters.hidden = !orderManagement || currentCategory !== 'Chinese';
+    heading.classList.toggle('with-subcategories', !subcategoryFilters.hidden);
     const count = byId('menu-count');
     count.textContent = text(`${visible.length} 道菜品`, `${visible.length} ${visible.length === 1 ? 'dish' : 'dishes'}`);
     count.hidden = false;
@@ -274,6 +286,7 @@ function renderCategory() {
     list.replaceChildren();
     for (const dish of visible) {
         const card = element('article', 'dish-card');
+        card.classList.toggle('dish-layout', orderManagement);
         const link = button('dish-link', undefined, () => openDishDetails(dish));
         link.setAttribute('aria-label', text(`查看${dish.name}菜谱`, `View recipe for ${dish.name}`));
         link.dataset.dishId = dish.id;
@@ -291,14 +304,20 @@ function renderCategory() {
             descriptions.push(label.id);
             thumbnail.append(heart, label);
         }
-        const info = element('span', 'dish-info');
-        info.append(element('span', 'dish-name', dish.name));
-        if (dish.description) info.append(element('span', 'dish-description', dish.description));
-
         const details = element('div', 'dish-meta');
         const price = element('span', 'dish-price', money.format(dish.price));
         price.id = `dish-price-${dish.id}`;
-        details.append(price);
+        const info = element('span', 'dish-info');
+        const name = element('span', 'dish-name', dish.name);
+        if (orderManagement) {
+            const title = element('span', 'dish-title-line');
+            title.append(name, price);
+            info.append(title);
+        } else {
+            info.append(name);
+            details.append(price);
+        }
+        if (dish.description) info.append(element('span', 'dish-description', dish.description));
         if (dish.available) {
             details.append(quantityControls(dish, cart.get(dish.id) ?? 0));
         } else {
@@ -313,7 +332,7 @@ function renderCategory() {
         card.append(link, details);
         list.append(card);
     }
-    if (!visible.length) list.append(element('p', 'empty', text('这个菜系暂时没有菜品。', 'No dishes in this category yet.')));
+    if (!visible.length) list.append(element('p', 'empty', text('这个分类暂时没有菜品。', 'No dishes in this category yet.')));
 }
 
 function updateRecipeScrollTarget() {
@@ -323,6 +342,7 @@ function updateRecipeScrollTarget() {
 
 function openDishDetails(dish) {
     recipeDish = dish;
+    setFormError('recipe-edit-error');
     recipeMenuPosition = byId('view-menu').hidden ? undefined : {
         category: currentCategory,
         scrollTop: document.querySelector('.menu-scroll').scrollTop
@@ -411,7 +431,8 @@ async function placeOrder() {
             body: JSON.stringify({ items })
         });
         cart.clear();
-        showToast(text(`订单 #${order.id} 已下单 · ${money.format(order.total)}`, `Order #${order.id} placed · ${money.format(order.total)}`));
+        const label = orderLabel(order);
+        showToast(text(`${label} 已下单 · ${money.format(order.total)}`, `${label} placed · ${money.format(order.total)}`));
     } catch (error) {
         showNotice(error.message, true);
         await loadDishesFromServer().catch(() => {});
@@ -422,19 +443,24 @@ async function placeOrder() {
     }
 }
 
+function orderLabel(order) {
+    const number = order.displayNumber ?? order.id;
+    return text(`订单 #${number}`, `Order #${number}`);
+}
+
 function orderCard(order) {
     const card = element('article', 'history-card');
     const heading = element('div', 'receipt-heading');
     const time = element('time', 'receipt-time', orderTime.format(new Date(order.createdAt)));
     time.dateTime = order.createdAt;
-    const title = element('h3', '', text(`订单 #${order.id}`, `Order #${order.id}`));
+    const title = element('h3', 'receipt-number', orderLabel(order));
     const total = element('strong', 'receipt-total', text(`合计 ${money.format(order.total)}`, `Total ${money.format(order.total)}`));
     if (orderManagement) {
         card.classList.add('editable-order');
-        const identity = element('div', 'receipt-identity');
-        identity.append(title, time);
-        if (isAdmin()) identity.append(element('p', 'receipt-orderer', text(`下单人：${order.orderer}`, `Ordered by: ${order.orderer}`)));
-        heading.append(identity, total);
+        const details = element('div', 'receipt-details');
+        details.append(time);
+        if (isAdmin()) details.append(element('p', 'receipt-orderer', text(`下单人：${order.orderer}`, `Ordered by: ${order.orderer}`)));
+        heading.append(title, details, total);
     } else {
         heading.append(title, time, element('span', `status ${order.status.toLowerCase()}`, statusLabels[order.status]), total);
     }
@@ -458,7 +484,7 @@ function orderCard(order) {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ status: target })
                     });
-                    showToast(text(`订单 #${updated.id} · ${statusLabels[updated.status]}`, `Order #${updated.id} · ${statusLabels[updated.status]}`));
+                    showToast(`${orderLabel(updated)} · ${statusLabels[updated.status]}`);
                     await renderOrders();
                 } catch (error) {
                     showNotice(error.message, true);
@@ -493,7 +519,7 @@ async function openOrderEditor(order) {
             .map(dish => [dish.id, { dishId: dish.id, name: dish.name, unitPrice: dish.price }]));
         for (const [id, item] of snapshots) choices.set(id, item);
         editingOrder = { id: order.id, items: new Map(order.items.map(item => [item.dishId, { ...item }])), choices };
-        byId('order-editor-title').textContent = text(`编辑订单 #${order.id}`, `Edit order #${order.id}`);
+        byId('order-editor-title').textContent = text(`编辑${orderLabel(order)}`, `Edit ${orderLabel(order).toLowerCase()}`);
         setFormError('order-editor-error');
         renderOrderEditor();
         orderDialog.showModal();
@@ -578,7 +604,8 @@ byId('order-editor').addEventListener('submit', async event => {
 });
 
 async function deleteOrder(order, control) {
-    if (!window.confirm(text(`确定删除订单 #${order.id} 吗？`, `Delete order #${order.id}?`))) return;
+    const label = orderLabel(order);
+    if (!window.confirm(text(`确定删除${label} 吗？`, `Delete ${label.toLowerCase()}?`))) return;
     control.disabled = true;
     try {
         await request(`/api/admin/orders/${order.id}`, { method: 'DELETE' });
@@ -778,6 +805,7 @@ function renderProfile() {
     const account = session?.user;
     byId('unlogged-box').hidden = Boolean(account);
     byId('logged-box').hidden = !account;
+    renderAvatarControls();
     if (!account) {
         byId('favorites-list').replaceChildren();
         return;
@@ -786,7 +814,6 @@ function renderProfile() {
     byId('profile-nickname').textContent = account.nickname;
     byId('profile-username').textContent = account.username;
     byId('profile-role').textContent = isAdmin() ? text('店长', 'Manager') : text('尊贵食客', 'Guest');
-    byId('avatar-settings').hidden = !isAdmin();
     const favorites = dishes.filter(dish => account.favorites.includes(dish.id));
     byId('favorites-list').replaceChildren(...favorites.map(dish => {
         const item = element('li', '');
@@ -942,6 +969,45 @@ async function toggleFavorite() {
     }
 }
 
+const avatarSettings = byId('avatar-settings');
+const avatarDialog = byId('avatar-dialog');
+const avatarTrigger = byId('manage-avatar');
+const avatarClose = byId('close-avatar');
+const avatarForm = byId('avatar-form');
+const avatarSave = byId('save-avatar');
+const avatarReset = byId('reset-avatar');
+const headerAvatarEditing = orderManagement && language === 'zh-CN';
+
+if (headerAvatarEditing) {
+    avatarDialog.querySelector('.modal-scroll').append(avatarSettings);
+    const label = byId('avatar-file-label');
+    label.textContent = label.dataset.dialogLabel;
+    avatarSave.textContent = avatarSave.dataset.dialogLabel;
+    avatarTrigger.addEventListener('click', () => {
+        if (!isAdmin() || avatarDialog.open) return;
+        avatarForm.reset();
+        setFormError('avatar-error');
+        avatarDialog.showModal();
+    });
+    avatarClose.addEventListener('click', () => avatarDialog.close());
+    avatarDialog.addEventListener('cancel', event => {
+        if (avatarSave.disabled) event.preventDefault();
+    });
+}
+
+function renderAvatarControls() {
+    const canEdit = isAdmin();
+    avatarSettings.hidden = !canEdit;
+    if (!headerAvatarEditing || avatarTrigger.hidden === !canEdit) return;
+    if (canEdit) {
+        avatarTrigger.append(kitchenAvatar);
+    } else {
+        if (avatarDialog.open) avatarDialog.close();
+        avatarTrigger.before(kitchenAvatar);
+    }
+    avatarTrigger.hidden = !canEdit;
+}
+
 function refreshAvatar() {
     kitchenAvatar.src = `/api/kitchen/avatar?v=${Date.now()}`;
 }
@@ -951,16 +1017,17 @@ kitchenAvatar.addEventListener('error', () => {
     if (source && source !== defaultKitchenAvatar) kitchenAvatar.src = defaultKitchenAvatar;
 });
 
+function setAvatarBusy(busy) {
+    avatarSave.disabled = avatarReset.disabled = avatarForm.elements.image.disabled = avatarClose.disabled = busy;
+}
+
 async function saveAvatar(event) {
     event.preventDefault();
+    const image = avatarForm.elements.image.files[0];
+    if (!image || avatarSave.disabled) return;
     setFormError('avatar-error');
-    const form = event.currentTarget;
-    const image = form.elements.image.files[0];
-    const save = byId('save-avatar');
-    if (!image || save.disabled) return;
-    const reset = byId('reset-avatar');
     const progress = byId('avatar-progress');
-    save.disabled = reset.disabled = form.elements.image.disabled = true;
+    setAvatarBusy(true);
     progress.hidden = image.size <= maxImageBytes;
     try {
         const file = await prepareImage(image);
@@ -968,25 +1035,31 @@ async function saveAvatar(event) {
         const payload = new FormData();
         payload.append('image', file);
         await request('/api/admin/avatar', { method: 'PUT', body: payload });
-        form.reset();
+        avatarForm.reset();
         refreshAvatar();
+        if (avatarDialog.open) avatarDialog.close();
         showToast(text('厨房头像已更新。', 'Kitchen avatar updated.'));
     } catch (error) {
         setFormError('avatar-error', error.message);
     } finally {
         progress.hidden = true;
-        save.disabled = reset.disabled = form.elements.image.disabled = false;
+        setAvatarBusy(false);
     }
 }
 
 async function resetAvatar() {
+    if (avatarReset.disabled) return;
     setFormError('avatar-error');
+    setAvatarBusy(true);
     try {
         await request('/api/admin/avatar', { method: 'DELETE' });
         refreshAvatar();
+        if (avatarDialog.open) avatarDialog.close();
         showToast(text('已恢复默认头像。', 'Default avatar restored.'));
     } catch (error) {
         setFormError('avatar-error', error.message);
+    } finally {
+        setAvatarBusy(false);
     }
 }
 
@@ -1066,10 +1139,11 @@ function snapshotDish() {
     const fields = editor.elements;
     return {
         name: fields.name.value, category: fields.category.value, price: fields.price.value,
+        subcategory: fields.category.value === 'Chinese' ? fields.subcategory.value : '',
         description: fields.description.value, available: fields.available.checked, tips: fields.tips.value,
         ingredients: [...byId('editable-ingredients').children].map(row => {
-            const [name, amount] = row.querySelectorAll('input');
-            return { name: name.value, amount: amount.value };
+            const [name, amount, cost] = row.querySelectorAll('input');
+            return { name: name.value, amount: amount.value, cost: cost?.value ?? '' };
         }),
         steps: [...byId('editable-steps').querySelectorAll('textarea')].map(input => input.value)
     };
@@ -1198,6 +1272,8 @@ function openEditor(dish, draft) {
     const fields = draft?.fields ?? dish;
     editor.elements.name.value = fields?.name ?? '';
     editor.elements.category.value = fields?.category ?? currentCategory;
+    editor.elements.subcategory.value = fields?.subcategory ?? '';
+    showDishSubcategory();
     editor.elements.price.value = fields?.price ?? '';
     editor.elements.description.value = fields?.description ?? '';
     editor.elements.available.checked = fields?.available ?? true;
@@ -1212,6 +1288,7 @@ function openEditor(dish, draft) {
     byId('editable-steps').replaceChildren();
     for (const ingredient of draft?.fields.ingredients ?? dish?.recipe.ingredients ?? []) addIngredient(ingredient);
     for (const step of draft?.fields.steps ?? dish?.recipe.steps ?? []) addStep(step);
+    showAutomaticPrice();
     byId('editor-title').textContent = dish ? text('编辑菜谱', 'Edit recipe') : text('添加新菜品', 'Add dish');
     byId('delete-dish').hidden = !dish;
     byId('recipe-view').hidden = true;
@@ -1221,6 +1298,44 @@ function openEditor(dish, draft) {
     beginAdminEdit(dialog, editorError);
     editor.querySelector('.editor-scroll').scrollTop = 0;
     editor.elements.name.focus();
+}
+
+async function editRecipe() {
+    const dish = recipeDish;
+    if (!orderManagement) {
+        openEditor(dish);
+        return;
+    }
+    const control = byId('edit-dish');
+    if (!isAdmin() || control.disabled) return;
+    control.disabled = true;
+    setFormError('recipe-edit-error');
+    try {
+        const editable = await request(`/api/admin/dishes/${dish.id}`, { cache: 'no-store' });
+        if (dialog.open && recipeDish === dish && editor.hidden && isAdmin()) openEditor(editable);
+    } catch (error) {
+        if (dialog.open && recipeDish === dish && editor.hidden) setFormError('recipe-edit-error', error.message);
+    } finally {
+        control.disabled = false;
+    }
+}
+
+function showDishSubcategory() {
+    const visible = orderManagement && editor.elements.category.value === 'Chinese';
+    byId('dish-subcategory').hidden = !visible;
+    editor.elements.subcategory.disabled = !visible;
+}
+
+function showAutomaticPrice() {
+    const hint = byId('auto-dish-price');
+    const costs = [...editor.querySelectorAll('.ingredient-cost')].filter(cost => cost.value !== '');
+    hint.hidden = !orderManagement || Boolean(editor.elements.price.value) || costs.length === 0 ||
+        costs.some(cost => !cost.validity.valid);
+    if (!hint.hidden) {
+        const cents = costs.reduce((sum, cost) => sum + Math.round(Number(cost.value) * 100), 0);
+        hint.textContent = text(`按原料成本计算的菜价：${money.format(cents / 100)}`,
+            `Price calculated from ingredients: ${money.format(cents / 100)}`);
+    }
 }
 
 function textField(label, value, maxLength) {
@@ -1236,7 +1351,25 @@ function addIngredient(ingredient = { name: '', amount: '' }) {
     const row = element('div', 'ingredient-edit');
     const name = textField(text('原料名称', 'Ingredient name'), ingredient.name, 120);
     const amount = textField(text('用量', 'Amount'), ingredient.amount, 80);
-    row.append(name, amount, button('secondary-btn row-remove', text('移除', 'Remove'), () => { row.remove(); saveDishDraft(); }));
+    row.append(name, amount);
+    if (orderManagement) {
+        const cost = element('input', 'ingredient-cost');
+        cost.type = 'number';
+        cost.min = '0';
+        cost.max = editor.elements.price.max;
+        cost.step = '0.01';
+        cost.inputMode = 'decimal';
+        cost.setAttribute('aria-label', text('原料成本', 'Ingredient cost'));
+        cost.placeholder = text('原料成本', 'Ingredient cost');
+        cost.value = ingredient.cost ?? '';
+        row.classList.add('with-cost');
+        row.append(cost);
+    }
+    row.append(button('secondary-btn row-remove', text('移除', 'Remove'), () => {
+        row.remove();
+        showAutomaticPrice();
+        saveDishDraft();
+    }));
     byId('editable-ingredients').append(row);
     return name;
 }
@@ -1355,14 +1488,21 @@ async function saveDish(event) {
     if (preparingPhoto || savingDish || !canSubmitEdit(edit)) return;
     editorError();
     const fields = snapshotDish();
-    const ingredients = fields.ingredients.map(item => ({ name: item.name.trim(), amount: item.amount.trim() }));
-    if (ingredients.some(item => item.amount && !item.name)) {
-        editorError(text('请填写有用量的原料名称。', 'Enter a name for each ingredient with an amount.'));
+    const ingredients = fields.ingredients.map(item => ({
+        name: item.name.trim(), amount: item.amount.trim(), cost: item.cost === '' ? null : Number(item.cost)
+    }));
+    if (ingredients.some(item => (item.amount || item.cost !== null) && !item.name)) {
+        editorError(text('请为填写了用量或成本的原料输入名称。', 'Enter a name for each ingredient with an amount or cost.'));
+        return;
+    }
+    if (fields.price === '' && !ingredients.some(item => item.cost !== null)) {
+        editorError(text('请填写菜价，或至少填写一项原料成本。', 'Enter a price or at least one ingredient cost.'));
         return;
     }
     const data = {
         ...fields,
-        name: fields.name.trim(), price: Number(fields.price), description: fields.description.trim(),
+        name: fields.name.trim(), price: fields.price === '' ? null : Number(fields.price),
+        subcategory: fields.subcategory || null, description: fields.description.trim(),
         ingredients: ingredients.filter(item => item.name),
         steps: fields.steps.map(step => step.trim()).filter(Boolean), tips: fields.tips.trim(),
         removeImage: removePhoto
@@ -1421,12 +1561,18 @@ async function deleteDish() {
     }
 }
 
-function activateCategory(category) {
+function activateCategory(category, subcategory = '') {
     currentCategory = categories.has(category) ? category : defaultCategory;
+    currentSubcategory = currentCategory === 'Chinese' && subcategories.has(subcategory) ? subcategory : '';
     for (const [value, item] of categories) {
         const active = value === currentCategory;
         item.classList.toggle('active', active);
         item.setAttribute('aria-pressed', String(active));
+    }
+    for (const filter of subcategoryFilters.children) {
+        const active = filter.dataset.subcategory === currentSubcategory;
+        filter.classList.toggle('active', active);
+        filter.setAttribute('aria-pressed', String(active));
     }
     renderCategory();
     document.querySelector('.menu-scroll').scrollTop = 0;
@@ -1441,15 +1587,29 @@ byId('nickname-form').addEventListener('submit', saveNickname);
 byId('password-settings').hidden = document.documentElement.dataset.passwordChanges !== 'true';
 byId('password-form').addEventListener('submit', changePassword);
 byId('favorite-dish').addEventListener('click', toggleFavorite);
-byId('avatar-form').addEventListener('submit', saveAvatar);
-byId('reset-avatar').addEventListener('click', resetAvatar);
+avatarForm.addEventListener('submit', saveAvatar);
+avatarReset.addEventListener('click', resetAvatar);
 byId('add-dish').addEventListener('click', startNewDish);
 recipeSplit.addEventListener('change', updateRecipeScrollTarget);
-byId('edit-dish').addEventListener('click', () => openEditor(recipeDish));
+byId('edit-dish').addEventListener('click', editRecipe);
+editor.elements.category.querySelector('option[value="Thai"]').hidden = !orderManagement;
+editor.elements.price.required = !orderManagement;
+for (const [value, label] of [['', text('全部中餐', 'All Chinese dishes')], ...subcategories]) {
+    const control = button('cuisine-item', label, () => activateCategory('Chinese', value));
+    control.dataset.subcategory = value;
+    subcategoryFilters.append(control);
+    const option = element('option', '', value ? label : text('不指定', 'Unspecified'));
+    option.value = value;
+    editor.elements.subcategory.append(option);
+}
 byId('add-ingredient').addEventListener('click', () => { addIngredient().focus(); saveDishDraft(); });
 byId('add-step').addEventListener('click', () => { addStep().focus(); saveDishDraft(); });
 editor.elements.photo.addEventListener('change', () => selectDishPhoto(editor.elements.photo.files[0]));
-editor.addEventListener('input', saveDishDraft);
+editor.addEventListener('input', () => {
+    showDishSubcategory();
+    showAutomaticPrice();
+    saveDishDraft();
+});
 byId('remove-photo').addEventListener('click', () => {
     editor.elements.photo.value = '';
     resetPhotoSelection();

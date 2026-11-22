@@ -13,6 +13,7 @@
             <div class="header-shell">
                 <div class="brand">
                     <img id="kitchen-avatar" alt="" hidden>
+                    <button id="manage-avatar" type="button" aria-label="{{manageAvatar}}" aria-haspopup="dialog" aria-controls="avatar-dialog" hidden></button>
                     <h1>{{brand}}</h1>
                 </div>
                 <nav class="header-nav" aria-label="{{navigation}}">
@@ -41,10 +42,12 @@
                         <button class="cuisine-item active" type="button" data-category="Chinese">{{chinese}}</button>
                         <button class="cuisine-item" type="button" data-category="Western">{{western}}</button>
                         <button class="cuisine-item" type="button" data-category="Japanese">{{japanese}}</button>
+                        <button class="cuisine-item" type="button" data-category="Thai" hidden>{{thai}}</button>
                         <button class="cuisine-item" type="button" data-category="Dessert">{{dessert}}</button>
                     </nav>
                     <div class="category-panel">
                         <h3 id="category-heading" class="category-heading"></h3>
+                        <div id="subcategory-filters" class="subcategory-filters" role="group" aria-label="{{subcategory}}" hidden></div>
                         <div id="full-dish-list" class="dish-grid">{{loading}}</div>
                     </div>
                 </section>
@@ -120,12 +123,12 @@
                             <ul id="favorites-list"></ul>
                         </section>
                         <section id="avatar-settings" class="profile-card" hidden>
-                            <h3>{{avatar}}</h3>
+                            <h3 id="avatar-title">{{avatar}}</h3>
                             <form id="avatar-form" class="form-fields">
                                 <p id="avatar-error" class="form-error" role="alert" hidden></p>
-                                <label>{{chooseAvatar}}<input name="image" type="file" accept="image/jpeg,image/png" required></label>
+                                <label><span id="avatar-file-label" data-dialog-label="{{chooseNewAvatar}}">{{chooseAvatar}}</span><input name="image" type="file" accept="image/jpeg,image/png" required></label>
                                 <p id="avatar-progress" role="status" hidden>{{compressingPhoto}}</p>
-                                <button id="save-avatar" class="primary-btn">{{saveAvatar}}</button>
+                                <button id="save-avatar" class="primary-btn" data-dialog-label="{{replaceAvatar}}">{{saveAvatar}}</button>
                             </form>
                             <button id="reset-avatar" type="button" class="secondary-btn">{{resetAvatar}}</button>
                         </section>
@@ -149,6 +152,10 @@
 
     <p id="toast" role="status" hidden></p>
 
+    <dialog id="avatar-dialog" class="modal-content" aria-labelledby="avatar-title">
+        <button id="close-avatar" class="close-icon" type="button" aria-label="{{cancelDraftChoice}}">×</button>
+        <div class="modal-scroll"></div>
+    </dialog>
     <dialog class="modal-content" id="dish-modal" aria-labelledby="modal-title">
         <div id="recipe-backdrop" aria-hidden="true"></div>
         <div class="dialog-surface">
@@ -163,6 +170,7 @@
                             <button id="edit-dish" type="button" class="secondary-btn" hidden>{{editRecipe}}</button>
                         </div>
                     </div>
+                    <p id="recipe-edit-error" class="form-error" role="alert" hidden></p>
                     <p id="modal-price" class="dish-price"></p>
                     <p id="modal-description"></p>
                     <section class="modal-section" aria-labelledby="ingredients-title">
@@ -188,9 +196,12 @@
                         <label>{{dishName}}<input name="name" required maxlength="120"></label>
                         <label>{{cuisines}}<select name="category">
                             <option value="Chinese">{{chinese}}</option><option value="Western">{{western}}</option>
-                            <option value="Japanese">{{japanese}}</option><option value="Dessert">{{dessert}}</option>
+                            <option value="Japanese">{{japanese}}</option><option value="Thai">{{thai}}</option>
+                            <option value="Dessert">{{dessert}}</option>
                         </select></label>
-                        <label>{{price}}<input name="price" type="number" min="0" max="99999999.99" step="0.01" required></label>
+                        <label id="dish-subcategory" hidden>{{subcategory}}<select name="subcategory"></select></label>
+                        <label>{{price}}<input name="price" type="number" inputmode="decimal" min="0" max="99999999.99" step="0.01" required></label>
+                        <p id="auto-dish-price" class="dish-price-hint" role="status" hidden></p>
                         <label>{{description}}<textarea name="description" rows="2" maxlength="240"></textarea></label>
                         <label class="checkbox-row"><input name="available" type="checkbox">{{available}}</label>
                         <label>{{photo}}<input name="photo" type="file" accept="image/jpeg,image/png"></label>

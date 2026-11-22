@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +33,11 @@ class MenuAdminController {
 
     MenuAdminController(MenuAdminService menu) {
         this.menu = menu;
+    }
+
+    @GetMapping("/admin/dishes/{id}")
+    ResponseEntity<EditableDish> dish(@PathVariable long id) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(menu.editableDish(id));
     }
 
     @PostMapping(path = "/admin/dishes", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -77,12 +83,20 @@ class MenuAdminController {
 
     record SavedDish(long id) {}
 
-    record IngredientEdit(@NotBlank @Size(max = 120) String name, @Size(max = 80) String amount) {}
+    record EditableDish(long id, String name, String category, String subcategory, String description, String icon,
+                        BigDecimal price, BigDecimal effectivePrice, boolean available, String imagePath,
+                        MenuItem.Recipe recipe) {}
+
+    record IngredientEdit(
+            @NotBlank @Size(max = 120) String name,
+            @Size(max = 80) String amount,
+            @DecimalMin("0") @DecimalMax("99999999.99") @Digits(integer = 8, fraction = 2) BigDecimal cost) {}
 
     record DishEdit(
             @NotBlank @Size(max = 120) String name,
-            @NotNull @Pattern(regexp = "Chinese|Western|Japanese|Dessert") String category,
-            @NotNull @DecimalMin("0") @DecimalMax("99999999.99") @Digits(integer = 8, fraction = 2) BigDecimal price,
+            @NotNull @Pattern(regexp = "Chinese|Western|Japanese|Thai|Dessert") String category,
+            @Pattern(regexp = "Staple|Vegetables|Beef|Chicken|Pork") String subcategory,
+            @DecimalMin("0") @DecimalMax("99999999.99") @Digits(integer = 8, fraction = 2) BigDecimal price,
             @Size(max = 240) String description,
             boolean available,
             @NotNull @Size(max = 100) List<@NotNull @Valid IngredientEdit> ingredients,

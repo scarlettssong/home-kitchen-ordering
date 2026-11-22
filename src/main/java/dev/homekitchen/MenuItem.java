@@ -1,5 +1,6 @@
 package dev.homekitchen;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.GeneratedValue;
@@ -18,9 +19,11 @@ class MenuItem {
     long id;
     String name;
     String category;
+    String subcategory;
     String description;
     String icon;
     BigDecimal price;
+    boolean automaticPrice;
     boolean available;
     String imagePath;
 
@@ -29,7 +32,8 @@ class MenuItem {
 
     record Recipe(List<Ingredient> ingredients, List<String> steps, String tips) {}
 
-    record Ingredient(String name, String amount) {}
+    record Ingredient(String name, String amount,
+                      @JsonInclude(JsonInclude.Include.NON_NULL) BigDecimal cost) {}
 
     protected MenuItem() {}
 }

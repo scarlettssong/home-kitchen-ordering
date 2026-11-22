@@ -257,6 +257,63 @@ class SharedMenuIntegrationTest {
     }
 
     @Test
+    void sharedOrderNumbersCloseGapsAcrossAccountsWhileResourceIdsStayStable() throws Exception {
+        jdbc.update("""
+                insert into kitchen_account(username,nickname,password_hash,role) values
+                    ('NumberManager','Manager','fixture','ADMIN'),
+                    ('NumberGuestOne','First guest','fixture','GUEST'),
+                    ('NumberGuestTwo','Second guest','fixture','GUEST')
+                """);
+        var manager = user("NumberManager").roles("ADMIN");
+        var firstGuest = user("NumberGuestOne");
+        var secondGuest = user("NumberGuestTwo");
+        long existing = jdbc.queryForObject("select count(*) from kitchen_order", Long.class);
+        String items = """
+                {"items":[{"dishId":1,"quantity":1}]}
+                """;
+
+        long[] ids = new long[3];
+        for (int i = 0; i < ids.length; i++) {
+            var created = mvc.perform(post("/api/orders").with(i == 1 ? secondGuest : firstGuest).with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON).content(items))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.displayNumber").value(existing + i + 1))
+                    .andReturn();
+            String location = created.getResponse().getHeader("Location");
+            ids[i] = Long.parseLong(location.substring(location.lastIndexOf('/') + 1));
+        }
+
+        mvc.perform(get("/api/orders").with(firstGuest)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(ids[2]))
+                .andExpect(jsonPath("$[0].displayNumber").value(existing + 3))
+                .andExpect(jsonPath("$[1].displayNumber").value(existing + 1));
+        mvc.perform(get("/api/orders").with(secondGuest)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].displayNumber").value(existing + 2));
+
+        mvc.perform(delete("/api/admin/orders/{id}", ids[1]).with(manager).with(csrf()))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/orders").with(manager)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(ids[2]))
+                .andExpect(jsonPath("$[0].displayNumber").value(existing + 2))
+                .andExpect(jsonPath("$[1].id").value(ids[0]))
+                .andExpect(jsonPath("$[1].displayNumber").value(existing + 1));
+        mvc.perform(get("/api/orders").with(firstGuest)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].displayNumber").value(existing + 2));
+
+        mvc.perform(put("/api/admin/orders/{id}", ids[2]).with(manager).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(items.replace("\"quantity\":1", "\"quantity\":2")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(ids[2]))
+                .andExpect(jsonPath("$.displayNumber").value(existing + 2));
+        mvc.perform(get("/api/orders/{id}", ids[2]).with(firstGuest)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayNumber").value(existing + 2))
+                .andExpect(jsonPath("$.items[0].quantity").value(2));
+    }
+
+    @Test
     void managerOrdererFallsBackToUsernameAndUnknownForLegacyOrder() throws Exception {
         jdbc.update("""
                 insert into kitchen_account(username,nickname,password_hash,role) values

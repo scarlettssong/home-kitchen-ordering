@@ -104,6 +104,11 @@ interface OrderRepository extends JpaRepository<KitchenOrder, Long> {
     @EntityGraph(attributePaths = "items")
     List<KitchenOrder> findAllByAccountIdOrderByIdDesc(long accountId);
 
+    @Query("select o.id from KitchenOrder o order by o.id")
+    List<Long> findIdsInCreationOrder();
+
+    long countByIdLessThanEqual(long id);
+
     Optional<KitchenOrder> findByIdAndAccountId(long id, long accountId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
