@@ -96,7 +96,7 @@ class AccountService implements UserDetailsService {
     Profile profile(KitchenAccount account) {
         List<Long> favorites = jdbc.queryForList(
                 "select dish_id from favorite_dish where account_id = ? order by dish_id", Long.class, account.id);
-        return new Profile(account.username, account.nickname, account.role, favorites);
+        return new Profile(account.id, account.username, account.nickname, account.role, favorites);
     }
 
     void favorite(KitchenAccount account, long dishId, boolean selected) {
@@ -165,5 +165,5 @@ class AccountService implements UserDetailsService {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, site.text(chinese, english));
     }
 
-    record Profile(String username, String nickname, KitchenAccount.Role role, List<Long> favorites) {}
+    record Profile(long id, String username, String nickname, KitchenAccount.Role role, List<Long> favorites) {}
 }

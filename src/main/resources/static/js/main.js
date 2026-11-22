@@ -98,6 +98,106 @@ function sendJson(path, method, data) {
     });
 }
 
+const editorLoginDialog = byId('editor-login-dialog');
+const editorLoginForm = byId('editor-login-form');
+let adminEdit;
+
+function beginAdminEdit(modal, showError) {
+    if (!orderManagement) return;
+    const { id, username } = session.user;
+    adminEdit = { modal, showError, id, username, lastPing: 0, needsLogin: false };
+}
+
+function editorSignIn(edit) {
+    edit.needsLogin = true;
+    edit.showError(text('登录已过期。请重新登录后再次保存。', 'Your session expired. Sign in and save again.'));
+    if (editorLoginDialog.open) return;
+    editorLoginForm.elements.username.value = edit.username;
+    setFormError('editor-login-error');
+    editorLoginDialog.showModal();
+}
+
+async function handleEditError(edit, error, showError) {
+    if (edit && adminEdit === edit && edit.modal.open && [401, 403].includes(error.status)) {
+        try {
+            const current = await request('/api/session');
+            if (adminEdit !== edit || !edit.modal.open) return;
+            if (current.user?.id !== edit.id) {
+                editorSignIn(edit);
+                return;
+            }
+            session = current;
+            if (current.user.role === 'ADMIN') {
+                showError(text('登录信息已刷新，请再次保存。', 'Sign-in details refreshed. Save again.'));
+                return;
+            }
+        } catch (sessionError) {
+            error = sessionError;
+        }
+    }
+    showError(edit && error instanceof TypeError
+        ? text('无法连接服务器。表单内容已保留，请恢复网络后重试。', 'Could not reach the server. Your edits are still here.')
+        : error.message);
+}
+
+function canSubmitEdit(edit) {
+    if (!edit?.needsLogin) return true;
+    editorSignIn(edit);
+    return false;
+}
+
+function endAdminEdit(modal) {
+    if (adminEdit?.modal !== modal || modal.open) return;
+    adminEdit = undefined;
+    if (editorLoginDialog.open) editorLoginDialog.close();
+}
+
+function keepEditingSession(event) {
+    const edit = adminEdit;
+    if (!event.isTrusted || !edit || edit.modal !== event.currentTarget || !edit.modal.open ||
+            !isAdmin() || edit.needsLogin || edit.checking || document.visibilityState !== 'visible' ||
+            !document.hasFocus() || Date.now() - edit.lastPing < 30000) return;
+    edit.lastPing = Date.now();
+    edit.checking = true;
+    request('/api/admin/edit-session', { cache: 'no-store' }).then(account => {
+        if (adminEdit === edit && edit.modal.open && account.id !== edit.id) edit.needsLogin = true;
+    }).catch(error => {
+        if (adminEdit === edit && edit.modal.open && error.status === 401) edit.needsLogin = true;
+    }).finally(() => { edit.checking = false; });
+}
+
+byId('cancel-editor-login').addEventListener('click', () => editorLoginDialog.close());
+editorLoginDialog.addEventListener('close', () => editorLoginForm.reset());
+editorLoginForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const edit = adminEdit;
+    const submit = byId('editor-login-submit');
+    if (!edit || submit.disabled) return;
+    submit.disabled = true;
+    setFormError('editor-login-error');
+    try {
+        session = await request('/api/session');
+        await authenticate(edit.username, editorLoginForm.elements.password.value);
+        await loadSession();
+        if (adminEdit !== edit || !edit.modal.open) return;
+        if (session.user?.id !== edit.id || !isAdmin()) {
+            throw new Error(text('请使用原店长账号继续编辑。', 'Use the original manager account to continue.'));
+        }
+        edit.needsLogin = false;
+        edit.lastPing = Date.now();
+        editorLoginDialog.close();
+        edit.showError();
+        showToast(text('已重新登录，请再次点击保存。', 'Signed in again. Select Save to submit.'));
+    } catch (error) {
+        setFormError('editor-login-error', error instanceof TypeError
+            ? text('无法连接服务器。请恢复网络后重试，表单内容仍会保留。', 'Reconnect and try again. Your edits are still here.')
+            : error.message);
+    } finally {
+        editorLoginForm.elements.password.value = '';
+        submit.disabled = false;
+    }
+});
+
 function showNotice(message = '', error = false) {
     if (error) hideToast();
     const notice = byId('notice');
@@ -397,6 +497,7 @@ async function openOrderEditor(order) {
         setFormError('order-editor-error');
         renderOrderEditor();
         orderDialog.showModal();
+        beginAdminEdit(orderDialog, message => setFormError('order-editor-error', message));
     } catch (error) {
         showNotice(error.message, true);
     }
@@ -442,12 +543,19 @@ byId('add-order-dish').addEventListener('click', () => {
     editingOrder.items.set(dish.dishId, { ...dish, quantity: 1 });
     renderOrderEditor();
 });
-byId('close-order-editor').addEventListener('click', () => orderDialog.close());
+byId('close-order-editor').addEventListener('click', () => {
+    if (!byId('save-order').disabled) orderDialog.close();
+});
+orderDialog.addEventListener('cancel', event => {
+    if (byId('save-order').disabled) event.preventDefault();
+});
+orderDialog.addEventListener('close', () => endAdminEdit(orderDialog));
 byId('order-editor').addEventListener('submit', async event => {
     event.preventDefault();
     const { id, items } = editingOrder;
     const save = byId('save-order');
-    if (save.disabled) return;
+    const edit = adminEdit;
+    if (save.disabled || !canSubmitEdit(edit)) return;
     setFormError('order-editor-error');
     if (!items.size) {
         setFormError('order-editor-error', text('订单至少需要一道菜。', 'Add at least one dish to the order.'));
@@ -462,7 +570,7 @@ byId('order-editor').addEventListener('submit', async event => {
         showToast(text('订单已保存。', 'Order saved.'));
         await renderOrders();
     } catch (error) {
-        if (orderDialog.open) setFormError('order-editor-error', error.message);
+        if (orderDialog.open) await handleEditError(edit, error, message => setFormError('order-editor-error', message));
         else showNotice(error.message, true);
     } finally {
         save.disabled = false;
@@ -586,7 +694,14 @@ byId('back-to-menu').addEventListener('click', () => {
     cartButton.focus();
 });
 
-dialog.querySelector('.close-icon').addEventListener('click', () => dialog.close());
+function closeDishDialog() {
+    if (!savingDish) dialog.close();
+}
+
+dialog.querySelector('.close-icon').addEventListener('click', closeDishDialog);
+dialog.addEventListener('cancel', event => {
+    if (savingDish) event.preventDefault();
+});
 function outside(element, event) {
     const bounds = element.getBoundingClientRect();
     return event.clientX < bounds.left || event.clientX >= bounds.right ||
@@ -602,7 +717,7 @@ dialog.addEventListener('pointerdown', event => {
 });
 dialog.addEventListener('pointercancel', () => { desktopBackdropStart = false; });
 dialog.addEventListener('click', event => {
-    if (desktopBackdropStart && isNativeBackdrop(event)) dialog.close();
+    if (desktopBackdropStart && isNativeBackdrop(event)) closeDishDialog();
     desktopBackdropStart = false;
 });
 
@@ -623,7 +738,7 @@ recipeBackdrop.addEventListener('pointerup', event => {
         Math.hypot(event.clientX - start.x, event.clientY - start.y) < 10;
 });
 recipeBackdrop.addEventListener('click', () => {
-    if (backdropTap) dialog.close();
+    if (backdropTap) closeDishDialog();
     backdropTap = false;
 });
 byId('place-order').addEventListener('click', placeOrder);
@@ -681,6 +796,16 @@ function renderProfile() {
     if (!favorites.length) byId('favorites-list').append(element('li', 'empty', text('暂无收藏菜品。', 'No favorite dishes yet.')));
 }
 
+async function authenticate(username, password) {
+    try {
+        await request('/api/login', { method: 'POST', body: new URLSearchParams({ username, password }) });
+    } catch (error) {
+        if (error.status === 401) throw new Error(text('用户名或密码不正确。', 'Incorrect username or password.'));
+        if (error.status === 403) throw new Error(text('登录表单已过期，请重新尝试登录。', 'The sign-in form expired. Try signing in again.'));
+        throw error;
+    }
+}
+
 async function submitAuth(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -694,17 +819,11 @@ async function submitAuth(event) {
     showNotice();
     setFormError('auth-error');
     try {
-        if (!session) await loadSession();
+        await loadSession();
         if (registering) {
             await sendJson('/api/register', 'POST', { username, password, nickname: fields.get('nickname') });
         }
-        try {
-            await request('/api/login', { method: 'POST', body: new URLSearchParams({ username, password }) });
-        } catch (error) {
-            if (error.status === 401) throw new Error(text('用户名或密码不正确。', 'Incorrect username or password.'));
-            if (error.status === 403) throw new Error(text('登录表单已过期，请刷新页面后重试。', 'The sign-in form expired. Refresh the page and try again.'));
-            throw error;
-        }
+        await authenticate(username, password);
         try {
             await loadSession();
             if (!session.user) throw new Error();
@@ -734,6 +853,7 @@ async function submitAuth(event) {
 async function logout() {
     try {
         await request('/api/logout', { method: 'POST' });
+        adminEdit = undefined;
         hideToast();
         session = null;
         byId('password-form').reset();
@@ -915,31 +1035,190 @@ function clearPreviewUrl() {
     previewUrl = null;
 }
 
-function openEditor(dish) {
+const draftChoice = byId('dish-draft-dialog');
+let draftDatabase;
+let dishDraft;
+let pendingDraftPhoto;
+let openingDishEditor = false;
+
+function draftTransaction(accountId, update) {
+    draftDatabase ??= new Promise((resolve, reject) => {
+        const opening = indexedDB.open('home-kitchen-drafts', 1);
+        opening.onupgradeneeded = () => opening.result.createObjectStore('dishes');
+        opening.onsuccess = () => resolve(opening.result);
+        opening.onerror = () => reject(opening.error);
+    }).catch(error => {
+        draftDatabase = undefined;
+        throw error;
+    });
+    return draftDatabase.then(database => new Promise((resolve, reject) => {
+        const transaction = database.transaction('dishes', update ? 'readwrite' : 'readonly');
+        const store = transaction.objectStore('dishes');
+        const read = store.get(accountId);
+        let result;
+        read.onsuccess = () => { result = update ? update(store, read.result) : read.result; };
+        transaction.oncomplete = () => resolve(result);
+        transaction.onabort = () => reject(transaction.error);
+    }));
+}
+
+function snapshotDish() {
+    const fields = editor.elements;
+    return {
+        name: fields.name.value, category: fields.category.value, price: fields.price.value,
+        description: fields.description.value, available: fields.available.checked, tips: fields.tips.value,
+        ingredients: [...byId('editable-ingredients').children].map(row => {
+            const [name, amount] = row.querySelectorAll('input');
+            return { name: name.value, amount: amount.value };
+        }),
+        steps: [...byId('editable-steps').querySelectorAll('textarea')].map(input => input.value)
+    };
+}
+
+function saveDishDraft() {
+    const draft = dishDraft;
+    if (!draft || !dialog.open) return;
+    const record = { revision: crypto.randomUUID(), fields: snapshotDish(), photo: selectedPhoto, pendingPhoto: pendingDraftPhoto };
+    const write = draft.lastWrite ?? Promise.resolve();
+    draft.lastWrite = write.then(() => draftTransaction(draft.owner, (store, current) => {
+        if (current?.revision !== draft.revision) return false;
+        store.put(record, draft.owner);
+        return true;
+    })).then(saved => {
+        if (saved) draft.revision = record.revision;
+        if (dishDraft === draft && dialog.open) {
+            setFormError('draft-error', saved ? '' : text('这份草稿已在其他页面被清除或替换。此表单仍可继续编辑和发布。',
+                'This draft was cleared or replaced in another tab. You can still edit and publish this form.'));
+        }
+    }).catch(() => {
+        if (dishDraft === draft && dialog.open) setFormError('draft-error', draftStorageError);
+    });
+}
+
+const draftStorageError = text('浏览器未能保存草稿。请保留此页面，直到可以发布。',
+    'The browser could not save the draft. Keep this page open until you can publish.');
+
+function chooseDishDraft() {
+    return new Promise(resolve => {
+        draftChoice.returnValue = '';
+        draftChoice.addEventListener('close', () => resolve(draftChoice.returnValue), { once: true });
+        draftChoice.showModal();
+    });
+}
+
+byId('continue-draft').addEventListener('click', () => draftChoice.close('continue'));
+byId('cancel-draft-choice').addEventListener('click', () => draftChoice.close());
+byId('replace-draft').addEventListener('click', () => {
+    if (window.confirm(text('确定丢弃上次草稿并新建菜品吗？', 'Discard the previous draft and start a new dish?'))) {
+        draftChoice.close('replace');
+    }
+});
+
+async function confirmDraftAccount(owner) {
+    if (!navigator.onLine) return isAdmin() && session.user.id === owner;
+    try {
+        await loadSession();
+        if (isAdmin() && session.user.id === owner) return true;
+        if (isAdmin()) {
+            showNotice(text('登录账号已变更，请重新打开添加新菜品。', 'The signed-in account changed. Open Add dish again.'), true);
+        } else {
+            switchTab('view-profile');
+            showNotice(text('请先登录店长账号，再打开菜品草稿。', 'Sign in as a manager to open a dish draft.'), true);
+        }
+    } catch {
+        showNotice(text('暂时无法确认登录状态，请恢复网络后重试。', 'Could not check the session. Reconnect and try again.'), true);
+    }
+    return false;
+}
+
+async function startNewDish() {
+    if (!isAdmin() || openingDishEditor) return;
+    if (!orderManagement) {
+        openEditor();
+        return;
+    }
+    openingDishEditor = true;
+    const owner = session.user.id;
+    try {
+        if (!await confirmDraftAccount(owner)) return;
+        let saved = await draftTransaction(owner);
+        if (saved) {
+            const choice = await chooseDishDraft();
+            if (!choice || !await confirmDraftAccount(owner)) return;
+            if (choice === 'replace') {
+                const cleared = await draftTransaction(owner, (store, current) => {
+                    if (current?.revision !== saved.revision) return false;
+                    store.delete(owner);
+                    return true;
+                });
+                if (!cleared) {
+                    showNotice(text('草稿已在其他页面改变，请重新打开添加菜品。', 'The draft changed in another tab. Open Add dish again.'), true);
+                    return;
+                }
+                saved = undefined;
+            }
+        }
+        if (!isAdmin() || session.user.id !== owner) return;
+        openEditor(undefined, saved);
+        dishDraft = { owner, revision: saved?.revision };
+        if (saved?.pendingPhoto) void selectDishPhoto(saved.pendingPhoto);
+    } catch {
+        if (isAdmin() && session.user.id === owner) {
+            openEditor();
+            setFormError('draft-error', draftStorageError);
+        }
+    } finally {
+        openingDishEditor = false;
+    }
+}
+
+async function clearPublishedDraft(draft) {
+    if (!draft) return true;
+    try {
+        await draft.lastWrite;
+        await draftTransaction(draft.owner, (store, current) => {
+            if (current && current.revision === draft.revision) store.delete(draft.owner);
+        });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function openEditor(dish, draft) {
     editingId = dish?.id;
+    dishDraft = undefined;
+    pendingDraftPhoto = undefined;
     dialog.classList.remove('recipe-mode');
     removePhoto = false;
     resetPhotoSelection();
     editor.reset();
     editorError();
-    editor.elements.name.value = dish?.name ?? '';
-    editor.elements.category.value = dish?.category ?? currentCategory;
-    editor.elements.price.value = dish?.price ?? '';
-    editor.elements.description.value = dish?.description ?? '';
-    editor.elements.available.checked = dish?.available ?? true;
-    editor.elements.tips.value = dish?.recipe.tips ?? '';
-    showPhotoPreview(dishPhotoPath(dish));
+    setFormError('draft-error');
+    const fields = draft?.fields ?? dish;
+    editor.elements.name.value = fields?.name ?? '';
+    editor.elements.category.value = fields?.category ?? currentCategory;
+    editor.elements.price.value = fields?.price ?? '';
+    editor.elements.description.value = fields?.description ?? '';
+    editor.elements.available.checked = fields?.available ?? true;
+    editor.elements.tips.value = draft?.fields.tips ?? dish?.recipe.tips ?? '';
+    if (draft?.photo) {
+        selectedPhoto = draft.photo;
+        previewUrl = URL.createObjectURL(selectedPhoto);
+    }
+    showPhotoPreview(previewUrl ?? dishPhotoPath(dish));
 
     byId('editable-ingredients').replaceChildren();
     byId('editable-steps').replaceChildren();
-    for (const ingredient of dish?.recipe.ingredients ?? []) addIngredient(ingredient);
-    for (const step of dish?.recipe.steps ?? []) addStep(step);
+    for (const ingredient of draft?.fields.ingredients ?? dish?.recipe.ingredients ?? []) addIngredient(ingredient);
+    for (const step of draft?.fields.steps ?? dish?.recipe.steps ?? []) addStep(step);
     byId('editor-title').textContent = dish ? text('编辑菜谱', 'Edit recipe') : text('添加新菜品', 'Add dish');
     byId('delete-dish').hidden = !dish;
     byId('recipe-view').hidden = true;
     editor.hidden = false;
     dialog.setAttribute('aria-labelledby', 'editor-title');
     if (!dialog.open) dialog.showModal();
+    beginAdminEdit(dialog, editorError);
     editor.querySelector('.editor-scroll').scrollTop = 0;
     editor.elements.name.focus();
 }
@@ -957,7 +1236,7 @@ function addIngredient(ingredient = { name: '', amount: '' }) {
     const row = element('div', 'ingredient-edit');
     const name = textField(text('原料名称', 'Ingredient name'), ingredient.name, 120);
     const amount = textField(text('用量', 'Amount'), ingredient.amount, 80);
-    row.append(name, amount, button('secondary-btn row-remove', text('移除', 'Remove'), () => row.remove()));
+    row.append(name, amount, button('secondary-btn row-remove', text('移除', 'Remove'), () => { row.remove(); saveDishDraft(); }));
     byId('editable-ingredients').append(row);
     return name;
 }
@@ -971,7 +1250,7 @@ function addStep(step = '') {
     input.maxLength = 2000;
     input.rows = 2;
     input.value = step;
-    row.append(input, button('secondary-btn row-remove', text('移除', 'Remove'), () => item.remove()));
+    row.append(input, button('secondary-btn row-remove', text('移除', 'Remove'), () => { item.remove(); saveDishDraft(); }));
     item.append(row);
     byId('editable-steps').append(item);
     return input;
@@ -1041,12 +1320,12 @@ async function prepareImage(file) {
     }
 }
 
-async function selectDishPhoto(event) {
-    const field = event.currentTarget;
-    const file = field.files[0];
+async function selectDishPhoto(file) {
     if (!file) return;
     const selection = ++photoSelection;
     editorError();
+    pendingDraftPhoto = file;
+    saveDishDraft();
     setPreparingPhoto(true, file.size > maxImageBytes);
     try {
         const photo = await prepareImage(file);
@@ -1059,32 +1338,33 @@ async function selectDishPhoto(event) {
         removePhoto = false;
     } catch (error) {
         if (selection !== photoSelection || !dialog.open) return;
-        field.value = '';
+        editor.elements.photo.value = '';
         editorError(error.message);
     } finally {
-        if (selection === photoSelection) setPreparingPhoto(false);
+        if (selection === photoSelection) {
+            pendingDraftPhoto = undefined;
+            setPreparingPhoto(false);
+            saveDishDraft();
+        }
     }
 }
 
 async function saveDish(event) {
     event.preventDefault();
-    if (preparingPhoto || savingDish) return;
+    const edit = adminEdit;
+    if (preparingPhoto || savingDish || !canSubmitEdit(edit)) return;
     editorError();
-    const fields = editor.elements;
-    const ingredients = [...byId('editable-ingredients').children].map(row => {
-        const [name, amount] = row.querySelectorAll('input');
-        return { name: name.value.trim(), amount: amount.value.trim() };
-    });
+    const fields = snapshotDish();
+    const ingredients = fields.ingredients.map(item => ({ name: item.name.trim(), amount: item.amount.trim() }));
     if (ingredients.some(item => item.amount && !item.name)) {
         editorError(text('请填写有用量的原料名称。', 'Enter a name for each ingredient with an amount.'));
         return;
     }
-    const steps = [...byId('editable-steps').querySelectorAll('textarea')]
-        .map(input => input.value.trim()).filter(Boolean);
     const data = {
-        name: fields.name.value.trim(), category: fields.category.value, price: Number(fields.price.value),
-        description: fields.description.value.trim(), available: fields.available.checked,
-        ingredients: ingredients.filter(item => item.name), steps, tips: fields.tips.value.trim(),
+        ...fields,
+        name: fields.name.trim(), price: Number(fields.price), description: fields.description.trim(),
+        ingredients: ingredients.filter(item => item.name),
+        steps: fields.steps.map(step => step.trim()).filter(Boolean), tips: fields.tips.trim(),
         removeImage: removePhoto
     };
     if (!data.name) {
@@ -1096,22 +1376,33 @@ async function saveDish(event) {
     const replacingPhoto = Boolean(selectedPhoto);
     if (replacingPhoto) payload.append('image', selectedPhoto);
 
+    const draft = dishDraft;
     savingDish = true;
+    editor.querySelector('.form-fields').inert = true;
+    dialog.querySelector('.close-icon').disabled = true;
+    byId('delete-dish').disabled = true;
     dishSaveButton.disabled = true;
     try {
         const saved = await request(editingId ? `/api/admin/dishes/${editingId}` : '/api/admin/dishes', {
             method: editingId ? 'PUT' : 'POST', body: payload
         });
         if (replacingPhoto) dishPhotoVersions.set(saved.id, Date.now());
+        const draftCleared = await clearPublishedDraft(draft);
         dialog.close();
         activateCategory(data.category);
-        await loadDishesFromServer();
-        showToast(text('菜品已保存。', 'Dish saved.'));
+        if (draftCleared) showToast(text('菜品已保存。', 'Dish saved.'));
+        else showNotice(text('菜品已发布，但浏览器未能清除草稿。', 'The dish was published, but the browser could not clear the draft.'), true);
+        await loadDishesFromServer().catch(() => {
+            if (draftCleared) showNotice(text('菜品已发布，菜单刷新失败。请刷新页面查看。', 'The dish was published, but the menu did not refresh. Reload to view it.'), true);
+        });
     } catch (error) {
-        if (dialog.open) editorError(error.message);
+        if (dialog.open) await handleEditError(edit, error, editorError);
         else showNotice(error.message, true);
     } finally {
         savingDish = false;
+        editor.querySelector('.form-fields').inert = false;
+        dialog.querySelector('.close-icon').disabled = false;
+        byId('delete-dish').disabled = false;
         dishSaveButton.disabled = preparingPhoto;
     }
 }
@@ -1152,21 +1443,31 @@ byId('password-form').addEventListener('submit', changePassword);
 byId('favorite-dish').addEventListener('click', toggleFavorite);
 byId('avatar-form').addEventListener('submit', saveAvatar);
 byId('reset-avatar').addEventListener('click', resetAvatar);
-byId('add-dish').addEventListener('click', () => openEditor());
+byId('add-dish').addEventListener('click', startNewDish);
 recipeSplit.addEventListener('change', updateRecipeScrollTarget);
 byId('edit-dish').addEventListener('click', () => openEditor(recipeDish));
-byId('add-ingredient').addEventListener('click', () => addIngredient().focus());
-byId('add-step').addEventListener('click', () => addStep().focus());
-editor.elements.photo.addEventListener('change', selectDishPhoto);
+byId('add-ingredient').addEventListener('click', () => { addIngredient().focus(); saveDishDraft(); });
+byId('add-step').addEventListener('click', () => { addStep().focus(); saveDishDraft(); });
+editor.elements.photo.addEventListener('change', () => selectDishPhoto(editor.elements.photo.files[0]));
+editor.addEventListener('input', saveDishDraft);
 byId('remove-photo').addEventListener('click', () => {
     editor.elements.photo.value = '';
     resetPhotoSelection();
     removePhoto = true;
+    pendingDraftPhoto = undefined;
     showPhotoPreview(null);
+    saveDishDraft();
 });
 byId('delete-dish').addEventListener('click', deleteDish);
 editor.addEventListener('submit', saveDish);
+for (const modal of [dialog, orderDialog]) {
+    for (const type of ['keydown', 'pointerdown', 'input']) modal.addEventListener(type, keepEditingSession);
+}
+
 dialog.addEventListener('close', () => {
+    endAdminEdit(dialog);
+    dishDraft = undefined;
+    pendingDraftPhoto = undefined;
     resetPhotoSelection();
     desktopBackdropStart = false;
     touchBackdropStart = undefined;

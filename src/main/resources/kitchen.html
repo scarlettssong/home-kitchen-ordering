@@ -183,6 +183,7 @@
                 <div class="modal-scroll editor-scroll">
                     <h2 id="editor-title">{{editRecipe}}</h2>
                     <p id="editor-error" class="form-error" role="status" hidden></p>
+                    <p id="draft-error" class="form-error" role="alert" hidden></p>
                     <div class="form-fields">
                         <label>{{dishName}}<input name="name" required maxlength="120"></label>
                         <label>{{cuisines}}<select name="category">
@@ -228,6 +229,32 @@
             </div>
             <div class="modal-footer editor-footer">
                 <button id="save-order" class="primary-btn">{{saveOrder}}</button>
+            </div>
+        </form>
+    </dialog>
+    <dialog id="dish-draft-dialog" class="modal-content" aria-labelledby="dish-draft-title">
+        <div class="modal-scroll editor-scroll">
+            <h2 id="dish-draft-title">{{draftTitle}}</h2>
+            <p>{{draftPrompt}}</p>
+        </div>
+        <div class="modal-footer editor-footer">
+            <button id="continue-draft" class="primary-btn" type="button">{{continueDraft}}</button>
+            <button id="replace-draft" class="secondary-btn" type="button">{{startNewDish}}</button>
+            <button id="cancel-draft-choice" class="secondary-btn" type="button">{{cancelDraftChoice}}</button>
+        </div>
+    </dialog>
+    <dialog id="editor-login-dialog" class="modal-content" aria-labelledby="editor-login-title">
+        <form id="editor-login-form">
+            <div class="modal-scroll editor-scroll form-fields">
+                <h2 id="editor-login-title">{{editorLoginTitle}}</h2>
+                <p>{{editorLoginHint}}</p>
+                <p id="editor-login-error" class="form-error" role="alert" hidden></p>
+                <label>{{username}}<input name="username" autocomplete="username" readonly></label>
+                <label>{{password}}<input name="password" type="password" autocomplete="current-password" required autofocus></label>
+            </div>
+            <div class="modal-footer editor-footer">
+                <button id="editor-login-submit" class="primary-btn">{{signIn}}</button>
+                <button id="cancel-editor-login" class="secondary-btn" type="button">{{cancelDraftChoice}}</button>
             </div>
         </form>
     </dialog>

@@ -33,6 +33,12 @@ class AccountController {
         return new Session(profile, csrf.getHeaderName(), csrf.getToken());
     }
 
+    @GetMapping("/admin/edit-session")
+    EditorAccount editSession(Principal principal) {
+        var account = accounts.account(principal.getName());
+        return new EditorAccount(account.id, account.username);
+    }
+
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     void register(@Valid @RequestBody Registration request) {
@@ -64,6 +70,7 @@ class AccountController {
     }
 
     record Session(AccountService.Profile user, String csrfHeader, String csrfToken) {}
+    record EditorAccount(long id, String username) {}
     record Registration(@NotBlank String username, @Size(max = 60) String nickname, String password) {}
     record PasswordChange(String currentPassword, String newPassword, String confirmPassword) {}
     record Nickname(@NotBlank @Size(max = 60) String nickname) {}

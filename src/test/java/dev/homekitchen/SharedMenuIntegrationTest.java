@@ -13,10 +13,12 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -42,6 +44,27 @@ class SharedMenuIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired EntityManager entities;
+    @Autowired PasswordEncoder passwords;
+
+    @Test
+    void editHeartbeatUsesTheExistingManagerSession() throws Exception {
+        String password = UUID.randomUUID().toString();
+        jdbc.update("""
+                insert into kitchen_account(username,nickname,password_hash,role)
+                values ('SessionManager','Manager',?,'ADMIN')
+                """, passwords.encode(password));
+        var login = mvc.perform(post("/api/login").with(csrf())
+                        .param("username", "sessionmanager").param("password", password))
+                .andExpect(status().isNoContent()).andReturn();
+        var session = (MockHttpSession) login.getRequest().getSession(false);
+        assertEquals(24 * 60 * 60, session.getMaxInactiveInterval());
+        mvc.perform(get("/api/admin/edit-session").session(session))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.username").value("SessionManager"));
+        mvc.perform(get("/api/admin/edit-session")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/admin/edit-session").with(user("guest"))).andExpect(status().isForbidden());
+        mvc.perform(post("/api/logout").session(session).with(csrf())).andExpect(status().isNoContent());
+        mvc.perform(get("/api/admin/edit-session")).andExpect(status().isUnauthorized());
+    }
 
     @Test
     void anonymousVisitorCanReadRecipesAndPhotosInChineseMode() throws Exception {

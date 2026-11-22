@@ -838,6 +838,7 @@ button:disabled { cursor: default; }
 .editor-scroll { padding: 18px 18px 24px; }
 .editor-scroll h2 { margin-bottom: 14px; padding-right: 44px; font-size: 21px; }
 .editor-footer { display: flex; gap: 10px; align-items: center; }
+#dish-draft-dialog .editor-footer { flex-wrap: wrap; }
 .editor-footer .primary-btn { flex: 1; }
 .editor-footer .danger { color: #852e48; }
 #editor-photo { width: min(100%, 235px); max-height: 140px; border-radius: 10px; object-fit: contain; }
