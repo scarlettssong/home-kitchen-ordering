@@ -149,66 +149,69 @@
     <p id="toast" role="status" hidden></p>
 
     <dialog class="modal-content" id="dish-modal" aria-labelledby="modal-title">
-        <button class="close-icon" type="button" aria-label="{{closeRecipe}}" autofocus>×</button>
-        <div class="modal-scroll recipe-layout" id="recipe-view" tabindex="0" aria-label="{{recipe}}">
-            <figure class="recipe-photo"><img class="modal-img" id="modal-img" alt=""></figure>
-            <div class="modal-body" id="recipe-content" tabindex="-1" aria-label="{{recipeContent}}">
-                <div class="recipe-heading">
-                    <h2 id="modal-title" tabindex="-1"></h2>
-                    <div class="recipe-actions">
-                        <button id="favorite-dish" type="button" class="secondary-btn" hidden></button>
-                        <button id="edit-dish" type="button" class="secondary-btn" hidden>{{editRecipe}}</button>
+        <div id="recipe-backdrop" aria-hidden="true"></div>
+        <div class="dialog-surface">
+            <button class="close-icon" type="button" aria-label="{{closeRecipe}}">×</button>
+            <div class="modal-scroll recipe-layout" id="recipe-view" tabindex="0" aria-label="{{recipe}}">
+                <figure class="recipe-photo"><img class="modal-img" id="modal-img" alt=""></figure>
+                <div class="modal-body" id="recipe-content" tabindex="-1" aria-label="{{recipeContent}}">
+                    <div class="recipe-heading">
+                        <h2 id="modal-title" tabindex="-1" autofocus></h2>
+                        <div class="recipe-actions">
+                            <button id="favorite-dish" type="button" class="secondary-btn" hidden></button>
+                            <button id="edit-dish" type="button" class="secondary-btn" hidden>{{editRecipe}}</button>
+                        </div>
+                    </div>
+                    <p id="modal-price" class="dish-price"></p>
+                    <p id="modal-description"></p>
+                    <section class="modal-section" aria-labelledby="ingredients-title">
+                        <h3 id="ingredients-title">{{ingredients}}</h3>
+                        <dl id="modal-ingredients"></dl>
+                    </section>
+                    <section class="modal-section" aria-labelledby="steps-title">
+                        <h3 id="steps-title">{{steps}}</h3>
+                        <ol id="modal-steps"></ol>
+                    </section>
+                    <section class="modal-section recipe-tips" id="modal-tips-area" aria-labelledby="tips-title" hidden>
+                        <h3 id="tips-title">{{tips}}</h3>
+                        <p id="modal-tips"></p>
+                    </section>
+                </div>
+            </div>
+            <form id="dish-editor" hidden>
+                <div class="modal-scroll editor-scroll">
+                    <h2 id="editor-title">{{editRecipe}}</h2>
+                    <p id="editor-error" class="form-error" role="status" hidden></p>
+                    <div class="form-fields">
+                        <label>{{dishName}}<input name="name" required maxlength="120"></label>
+                        <label>{{cuisines}}<select name="category">
+                            <option value="Chinese">{{chinese}}</option><option value="Western">{{western}}</option>
+                            <option value="Japanese">{{japanese}}</option><option value="Dessert">{{dessert}}</option>
+                        </select></label>
+                        <label>{{price}}<input name="price" type="number" min="0" max="99999999.99" step="0.01" required></label>
+                        <label>{{description}}<textarea name="description" rows="2" maxlength="240"></textarea></label>
+                        <label class="checkbox-row"><input name="available" type="checkbox">{{available}}</label>
+                        <label>{{photo}}<input name="photo" type="file" accept="image/jpeg,image/png"></label>
+                        <p id="photo-status" role="status" hidden>{{compressingPhoto}}</p>
+                        <img id="editor-photo" alt="{{photoPreview}}" hidden>
+                        <button id="remove-photo" type="button" class="secondary-btn" hidden>{{removePhoto}}</button>
+                        <fieldset><legend>{{ingredientsAmounts}}</legend>
+                            <div id="editable-ingredients"></div>
+                            <button id="add-ingredient" type="button" class="secondary-btn">{{addIngredient}}</button>
+                        </fieldset>
+                        <fieldset><legend>{{instructions}}</legend>
+                            <ol id="editable-steps"></ol>
+                            <button id="add-step" type="button" class="secondary-btn">{{addStep}}</button>
+                        </fieldset>
+                        <label>{{optionalTips}}<textarea name="tips" rows="3" maxlength="4000"></textarea></label>
                     </div>
                 </div>
-                <p id="modal-price" class="dish-price"></p>
-                <p id="modal-description"></p>
-                <section class="modal-section" aria-labelledby="ingredients-title">
-                    <h3 id="ingredients-title">{{ingredients}}</h3>
-                    <dl id="modal-ingredients"></dl>
-                </section>
-                <section class="modal-section" aria-labelledby="steps-title">
-                    <h3 id="steps-title">{{steps}}</h3>
-                    <ol id="modal-steps"></ol>
-                </section>
-                <section class="modal-section recipe-tips" id="modal-tips-area" aria-labelledby="tips-title" hidden>
-                    <h3 id="tips-title">{{tips}}</h3>
-                    <p id="modal-tips"></p>
-                </section>
-            </div>
-        </div>
-        <form id="dish-editor" hidden>
-            <div class="modal-scroll editor-scroll">
-                <h2 id="editor-title">{{editRecipe}}</h2>
-                <p id="editor-error" class="form-error" role="status" hidden></p>
-                <div class="form-fields">
-                    <label>{{dishName}}<input name="name" required maxlength="120"></label>
-                    <label>{{cuisines}}<select name="category">
-                        <option value="Chinese">{{chinese}}</option><option value="Western">{{western}}</option>
-                        <option value="Japanese">{{japanese}}</option><option value="Dessert">{{dessert}}</option>
-                    </select></label>
-                    <label>{{price}}<input name="price" type="number" min="0" max="99999999.99" step="0.01" required></label>
-                    <label>{{description}}<textarea name="description" rows="2" maxlength="240"></textarea></label>
-                    <label class="checkbox-row"><input name="available" type="checkbox">{{available}}</label>
-                    <label>{{photo}}<input name="photo" type="file" accept="image/jpeg,image/png"></label>
-                    <p id="photo-status" role="status" hidden>{{compressingPhoto}}</p>
-                    <img id="editor-photo" alt="{{photoPreview}}" hidden>
-                    <button id="remove-photo" type="button" class="secondary-btn" hidden>{{removePhoto}}</button>
-                    <fieldset><legend>{{ingredientsAmounts}}</legend>
-                        <div id="editable-ingredients"></div>
-                        <button id="add-ingredient" type="button" class="secondary-btn">{{addIngredient}}</button>
-                    </fieldset>
-                    <fieldset><legend>{{instructions}}</legend>
-                        <ol id="editable-steps"></ol>
-                        <button id="add-step" type="button" class="secondary-btn">{{addStep}}</button>
-                    </fieldset>
-                    <label>{{optionalTips}}<textarea name="tips" rows="3" maxlength="4000"></textarea></label>
+                <div class="modal-footer editor-footer">
+                    <button id="delete-dish" type="button" class="secondary-btn danger" hidden>{{deleteDish}}</button>
+                    <button id="save-dish" class="primary-btn">{{saveDish}}</button>
                 </div>
-            </div>
-            <div class="modal-footer editor-footer">
-                <button id="delete-dish" type="button" class="secondary-btn danger" hidden>{{deleteDish}}</button>
-                <button id="save-dish" class="primary-btn">{{saveDish}}</button>
-            </div>
-        </form>
+            </form>
+        </div>
     </dialog>
 </body>
 </html>

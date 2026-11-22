@@ -11,8 +11,10 @@ const categories = new Map([...document.querySelectorAll('[data-category]')]
     .map(button => [button.dataset.category, button]));
 const defaultCategory = categories.keys().next().value;
 const tabs = document.querySelectorAll('[data-view]');
-const views = document.querySelectorAll('main[id]');
+const views = [...document.querySelectorAll('main[id]')];
+const defaultView = 'view-menu';
 const dialog = byId('dish-modal');
+const recipeBackdrop = byId('recipe-backdrop');
 const orderTime = new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' });
 const recipeSplit = matchMedia('(min-width: 850px)');
 const mobileLayout = matchMedia('(max-width: 699px)');
@@ -37,7 +39,9 @@ let submitting = false;
 let session;
 let recipeDish;
 let recipeMenuPosition;
-let backdropStart;
+let desktopBackdropStart = false;
+let touchBackdropStart;
+let backdropTap = false;
 let cartDrag;
 let suppressCartClick = false;
 let registering = false;
@@ -243,13 +247,11 @@ function openDishDetails(dish) {
     byId('modal-steps').replaceChildren(...recipe.steps.map(step => element('li', 'read-s-row', step)));
     byId('modal-tips').textContent = recipe.tips ?? '';
     byId('modal-tips-area').hidden = !recipe.tips;
-    title.toggleAttribute('autofocus', mobileLayout.matches);
-    dialog.querySelector('.close-icon').toggleAttribute('autofocus', !mobileLayout.matches);
     if (!dialog.open) dialog.showModal();
-    if (mobileLayout.matches) title.focus({ preventScroll: true });
     updateRecipeScrollTarget();
     byId('recipe-view').scrollTop = 0;
     byId('recipe-content').scrollTop = 0;
+    title.focus({ preventScroll: true });
 }
 
 function renderCart() {
@@ -378,16 +380,42 @@ function refreshOrders() {
     byId('view-order').classList.toggle('manager-orders', isAdmin());
     byId('order-title').textContent = isAdmin() ? text('厨房订单', 'Kitchen orders') : text('我的订单', 'My orders');
     if (!session?.user) {
-        list.append(element('p', 'empty', text('登录后可查看自己的订单。', 'Sign in to view your orders.')));
-        list.append(button('secondary-btn', text('前往登录', 'Sign in'), () => switchTab('view-profile')));
+        const prompt = element('div', 'order-login-card');
+        prompt.append(
+            element('p', '', text('登录后可查看自己的订单。', 'Sign in to view your orders.')),
+            button('secondary-btn', text('去登录', 'Sign in'), () => switchTab('view-profile'))
+        );
+        list.append(prompt);
         return;
     }
     renderOrders().catch(error => showNotice(error.message, true));
 }
 
+function readNavigation() {
+    try {
+        return JSON.parse(sessionStorage.getItem('kitchen-navigation')) ?? {};
+    } catch {
+        return {};
+    }
+}
+
+function saveNavigation() {
+    try {
+        sessionStorage.setItem('kitchen-navigation', JSON.stringify({
+            view: app.dataset.activeView,
+            category: currentCategory
+        }));
+    } catch {
+        // Navigation still works when browser storage is unavailable.
+    }
+}
+
 function switchTab(activeView) {
+    if (!views.some(view => view.id === activeView)) activeView = defaultView;
     if (privateMode && !session?.user) activeView = 'view-profile';
     app.dataset.activeView = activeView;
+    if (activeView === 'view-cart') cartButton.setAttribute('aria-current', 'page');
+    else cartButton.removeAttribute('aria-current');
     for (const view of views) view.hidden = view.id !== activeView;
     for (const tab of tabs) {
         const active = tab.dataset.view === activeView;
@@ -398,6 +426,7 @@ function switchTab(activeView) {
     if (activeView === 'view-cart') renderCart();
     if (activeView === 'view-order') refreshOrders();
     if (activeView === 'view-profile') renderProfile();
+    saveNavigation();
 }
 
 for (const [category, control] of categories) {
@@ -440,36 +469,44 @@ byId('back-to-menu').addEventListener('click', () => {
 });
 
 dialog.querySelector('.close-icon').addEventListener('click', () => dialog.close());
-function isBackdrop(event) {
-    if (event.target !== dialog) return false;
-    const bounds = dialog.getBoundingClientRect();
+function outside(element, event) {
+    const bounds = element.getBoundingClientRect();
     return event.clientX < bounds.left || event.clientX >= bounds.right ||
         event.clientY < bounds.top || event.clientY >= bounds.bottom;
 }
 
-function mobileRecipeOpen() {
-    return mobileLayout.matches && dialog.classList.contains('recipe-mode');
+function isNativeBackdrop(event) {
+    return event.target === dialog && outside(dialog, event);
 }
 
 dialog.addEventListener('pointerdown', event => {
-    if (!event.isPrimary) return;
-    backdropStart = event.button === 0 && isBackdrop(event)
-        ? { id: event.pointerId, x: event.clientX, y: event.clientY }
-        : undefined;
+    if (event.isPrimary) desktopBackdropStart = event.button === 0 && isNativeBackdrop(event);
 });
-dialog.addEventListener('pointercancel', () => { backdropStart = undefined; });
-dialog.addEventListener('pointerup', event => {
-    if (!mobileRecipeOpen() || event.pointerId !== backdropStart?.id) return;
-    const start = backdropStart;
-    backdropStart = undefined;
-    if (isBackdrop(event) && Math.hypot(event.clientX - start.x, event.clientY - start.y) < 10) {
-        event.preventDefault();
-        dialog.close();
-    }
-});
+dialog.addEventListener('pointercancel', () => { desktopBackdropStart = false; });
 dialog.addEventListener('click', event => {
-    if (!mobileRecipeOpen() && backdropStart && isBackdrop(event)) dialog.close();
-    backdropStart = undefined;
+    if (desktopBackdropStart && isNativeBackdrop(event)) dialog.close();
+    desktopBackdropStart = false;
+});
+
+recipeBackdrop.addEventListener('pointerdown', event => {
+    if (!event.isPrimary || event.button !== 0) return;
+    touchBackdropStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    backdropTap = false;
+});
+recipeBackdrop.addEventListener('pointercancel', () => {
+    touchBackdropStart = undefined;
+    backdropTap = false;
+});
+recipeBackdrop.addEventListener('pointerup', event => {
+    const start = touchBackdropStart;
+    if (event.pointerId !== start?.id) return;
+    touchBackdropStart = undefined;
+    backdropTap = outside(dialog.querySelector('.dialog-surface'), event) &&
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) < 10;
+});
+recipeBackdrop.addEventListener('click', () => {
+    if (backdropTap) dialog.close();
+    backdropTap = false;
 });
 byId('place-order').addEventListener('click', placeOrder);
 
@@ -975,6 +1012,7 @@ function activateCategory(category) {
     }
     renderCategory();
     document.querySelector('.menu-scroll').scrollTop = 0;
+    saveNavigation();
 }
 
 byId('refresh-orders').addEventListener('click', refreshOrders);
@@ -1003,7 +1041,9 @@ byId('delete-dish').addEventListener('click', deleteDish);
 editor.addEventListener('submit', saveDish);
 dialog.addEventListener('close', () => {
     resetPhotoSelection();
-    backdropStart = undefined;
+    desktopBackdropStart = false;
+    touchBackdropStart = undefined;
+    backdropTap = false;
     if (dialog.classList.contains('recipe-mode') && recipeMenuPosition?.category === currentCategory &&
             !byId('view-menu').hidden) {
         const scroller = document.querySelector('.menu-scroll');
@@ -1014,12 +1054,9 @@ dialog.addEventListener('close', () => {
 });
 
 byId('toggle-register').hidden = !registrationOpen;
-switchTab('view-menu');
-activateCategory(defaultCategory);
-renderCart();
-loadSession().then(() => {
-    if (!privateMode || session.user) {
-        if (privateMode) switchTab('view-menu');
-        return loadDishesFromServer();
-    }
+const savedNavigation = readNavigation();
+loadSession().catch(error => showNotice(error.message, true)).then(() => {
+    activateCategory(savedNavigation.category);
+    switchTab(savedNavigation.view);
+    if (!privateMode || session?.user) return loadDishesFromServer();
 }).catch(error => showNotice(error.message, true));
