@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{language}}" data-private="{{privateMode}}" data-registration-open="{{registrationOpen}}" data-public-avatar="{{publicAvatar}}" data-password-changes="{{passwordChanges}}">
+<html lang="{{language}}" data-private="{{privateMode}}" data-registration-open="{{registrationOpen}}" data-public-avatar="{{publicAvatar}}" data-password-changes="{{passwordChanges}}" data-order-management="{{orderManagement}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -124,7 +124,8 @@
                             <form id="avatar-form" class="form-fields">
                                 <p id="avatar-error" class="form-error" role="alert" hidden></p>
                                 <label>{{chooseAvatar}}<input name="image" type="file" accept="image/jpeg,image/png" required></label>
-                                <button class="primary-btn">{{saveAvatar}}</button>
+                                <p id="avatar-progress" role="status" hidden>{{compressingPhoto}}</p>
+                                <button id="save-avatar" class="primary-btn">{{saveAvatar}}</button>
                             </form>
                             <button id="reset-avatar" type="button" class="secondary-btn">{{resetAvatar}}</button>
                         </section>
@@ -135,13 +136,13 @@
 
         <nav class="bottom-nav" aria-label="{{navigation}}">
             <button class="nav-item active" type="button" data-view="view-menu" aria-current="page">
-                <span class="nav-icon" aria-hidden="true">🍴</span>{{orderFood}}
+                <svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v6a3 3 0 0 0 6 0V3M8 3v18m11 0V3a5 5 0 0 0-5 5v4h5"/></svg>{{orderFood}}
             </button>
             <button class="nav-item" type="button" data-view="view-order">
-                <span class="nav-icon" aria-hidden="true">📝</span>{{orders}}
+                <svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6m-6 5h6"/></svg>{{orders}}
             </button>
             <button class="nav-item" type="button" data-view="view-profile">
-                <span class="nav-icon" aria-hidden="true">👤</span>{{my}}
+                <svg class="nav-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg>{{my}}
             </button>
         </nav>
     </div>
@@ -212,6 +213,23 @@
                 </div>
             </form>
         </div>
+    </dialog>
+    <dialog id="order-editor-dialog" class="modal-content" aria-labelledby="order-editor-title">
+        <button id="close-order-editor" class="close-icon" type="button" aria-label="{{closeOrderEditor}}">×</button>
+        <form id="order-editor" class="order-editor">
+            <div class="modal-scroll editor-scroll">
+                <h2 id="order-editor-title"></h2>
+                <p id="order-editor-error" class="form-error" role="alert" hidden></p>
+                <ul id="order-editor-lines"></ul>
+                <div class="order-editor-add form-fields">
+                    <label>{{addOrderDish}}<select id="order-dish-picker"></select></label>
+                    <button id="add-order-dish" class="secondary-btn" type="button">{{addOrderDish}}</button>
+                </div>
+            </div>
+            <div class="modal-footer editor-footer">
+                <button id="save-order" class="primary-btn">{{saveOrder}}</button>
+            </div>
+        </form>
     </dialog>
 </body>
 </html>

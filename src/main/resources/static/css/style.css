@@ -429,7 +429,7 @@ button:disabled { cursor: default; }
         font-size: 12px;
     }
     .bottom-nav .nav-item.active { color: var(--primary-dark); }
-    .nav-icon { font-size: 17px; line-height: 1.1; margin-bottom: 3px; }
+    .nav-icon { width: 20px; height: 20px; flex-shrink: 0; margin-bottom: 3px; }
 }
 
 .main-view {
@@ -809,7 +809,13 @@ button:disabled { cursor: default; }
 .account-settings { border-top: 1px solid var(--line); margin-top: 16px; padding: 14px 0 12px; }
 .profile-card summary { cursor: pointer; font-weight: 600; }
 .account-settings form { padding-top: 12px; }
-.profile-card li { list-style: none; margin-top: 8px; }
+#favorites-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+#favorites-list li { list-style: none; min-width: 0; max-width: 100%; }
+#favorites-list button { max-width: 100%; overflow-wrap: anywhere; text-align: start; }
 .profile-card form + button { margin-top: 10px; }
 .logout-button { width: 100%; color: var(--primary-dark); }
 
@@ -846,3 +852,43 @@ button:disabled { cursor: default; }
 :root[data-private="true"]:not([data-can-browse="true"]) :is(.header-nav, .bottom-nav, #cart-button, #view-menu) {
     display: none;
 }
+
+
+.editable-order .receipt-heading {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+}
+.receipt-identity { min-width: 0; }
+.receipt-identity .receipt-time { display: block; margin-top: 3px; }
+.receipt-orderer { color: var(--muted); font-size: 13px; margin-top: 3px; overflow-wrap: anywhere; }
+.order-management-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 16px 12px;
+}
+.order-management-actions .danger { color: #852e48; }
+.order-editor { display: flex; flex-direction: column; min-height: 0; }
+#order-editor-lines { list-style: none; margin-bottom: 14px; }
+.order-editor-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 3.2rem auto;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--line);
+}
+.order-editor-line span { min-width: 0; overflow-wrap: anywhere; }
+.order-editor-line small { display: block; color: var(--muted); }
+.order-editor-line input {
+    min-width: 0;
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    background: var(--paper);
+    font: inherit;
+    padding: 6px 4px;
+}
+.order-editor-line .secondary-btn { padding-inline: 7px; }
+.order-editor-add { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }

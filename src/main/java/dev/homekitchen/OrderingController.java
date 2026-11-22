@@ -6,13 +6,17 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
@@ -55,6 +59,17 @@ class OrderingController {
     @PatchMapping("/orders/{id}/status")
     OrderingService.OrderView updateStatus(@PathVariable long id, @Valid @RequestBody StatusRequest request) {
         return service.updateStatus(id, request.status());
+    }
+
+    @PutMapping("/admin/orders/{id}")
+    OrderingService.OrderView editOrder(@PathVariable long id, @Valid @RequestBody OrderRequest request) {
+        return service.editOrder(id, request.items());
+    }
+
+    @DeleteMapping("/admin/orders/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void deleteOrder(@PathVariable long id) {
+        service.deleteOrder(id);
     }
 
     record OrderRequest(@NotNull @Size(min = 1, max = 30) List<@NotNull @Valid LineRequest> items) {}

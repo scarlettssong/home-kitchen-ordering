@@ -53,8 +53,12 @@ class KitchenOrder {
         this.accountId = accountId;
         this.status = Status.PLACED;
         this.createdAt = Instant.now();
+        addItems(items);
+    }
+
+    void addItems(List<Line> items) {
         this.items.addAll(items);
-        this.total = items.stream()
+        this.total = this.items.stream()
                 .map(line -> line.unitPrice.multiply(BigDecimal.valueOf(line.quantity)))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
@@ -77,9 +81,17 @@ class KitchenOrder {
         protected Line() {}
 
         Line(MenuItem dish, int quantity) {
-            this.dishId = dish.id;
-            this.dishName = dish.name;
-            this.unitPrice = dish.price;
+            this(dish.id, dish.name, dish.price, quantity);
+        }
+
+        Line(Line snapshot, int quantity) {
+            this(snapshot.dishId, snapshot.dishName, snapshot.unitPrice, quantity);
+        }
+
+        private Line(long dishId, String dishName, BigDecimal unitPrice, int quantity) {
+            this.dishId = dishId;
+            this.dishName = dishName;
+            this.unitPrice = unitPrice;
             this.quantity = quantity;
         }
     }
@@ -96,5 +108,5 @@ interface OrderRepository extends JpaRepository<KitchenOrder, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from KitchenOrder o where o.id = :id")
-    Optional<KitchenOrder> findForStatusUpdate(long id);
+    Optional<KitchenOrder> findForUpdate(long id);
 }
