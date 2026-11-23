@@ -3,12 +3,17 @@ package dev.homekitchen;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+
 @Component
 class KitchenSite {
     private final Mode mode;
     private final String language;
+    private final byte[] registrationInvite;
 
-    KitchenSite(@Value("${kitchen.mode}") String mode, @Value("${kitchen.language}") String language) {
+    KitchenSite(@Value("${kitchen.mode}") String mode, @Value("${kitchen.language}") String language,
+                @Value("${kitchen.registration-invite-code}") String registrationInvite) {
         this.mode = switch (mode) {
             case "private" -> Mode.PRIVATE;
             case "public" -> Mode.PORTFOLIO;
@@ -20,6 +25,7 @@ class KitchenSite {
             case "zh-CN", "en-US" -> language;
             default -> throw new IllegalArgumentException("KITCHEN_LANGUAGE must be zh-CN or en-US");
         };
+        this.registrationInvite = registrationInvite.isBlank() ? null : registrationInvite.getBytes(StandardCharsets.UTF_8);
     }
 
     boolean privateMode() {
@@ -32,6 +38,15 @@ class KitchenSite {
 
     boolean registrationOpen() {
         return mode != Mode.PRIVATE;
+    }
+
+    boolean registrationAvailable() {
+        return registrationOpen() && (!sharedMenu() || registrationInvite != null);
+    }
+
+    boolean matchesRegistrationInvite(String supplied) {
+        return registrationInvite != null &&
+                MessageDigest.isEqual(registrationInvite, supplied.getBytes(StandardCharsets.UTF_8));
     }
 
     boolean publicAvatar() {

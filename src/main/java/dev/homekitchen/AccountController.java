@@ -42,7 +42,7 @@ class AccountController {
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     void register(@Valid @RequestBody Registration request) {
-        accounts.register(request.username(), request.nickname(), request.password());
+        accounts.register(request.username(), request.nickname(), request.password(), request.inviteCode());
     }
 
     @PatchMapping("/profile")
@@ -71,7 +71,12 @@ class AccountController {
 
     record Session(AccountService.Profile user, String csrfHeader, String csrfToken) {}
     record EditorAccount(long id, String username) {}
-    record Registration(@NotBlank String username, @Size(max = 60) String nickname, String password) {}
+    record Registration(@NotBlank String username, @Size(max = 60) String nickname, String password, String inviteCode) {
+        @Override
+        public String toString() {
+            return "Registration[credentials redacted]";
+        }
+    }
     record PasswordChange(String currentPassword, String newPassword, String confirmPassword) {}
     record Nickname(@NotBlank @Size(max = 60) String nickname) {}
 }

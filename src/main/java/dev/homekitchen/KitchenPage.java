@@ -24,7 +24,7 @@ class KitchenPage {
         page = MESSAGE.matcher(source).replaceAll(match -> Matcher.quoteReplacement(switch (match.group(1)) {
             case "language" -> site.language();
             case "privateMode" -> Boolean.toString(site.privateMode());
-            case "registrationOpen" -> Boolean.toString(site.registrationOpen());
+            case "registrationOpen" -> Boolean.toString(site.registrationAvailable());
             case "publicAvatar" -> Boolean.toString(site.publicAvatar());
             case "orderManagement" -> Boolean.toString(site.sharedMenu());
             case "passwordChanges" -> Boolean.toString(site.sharedMenu());

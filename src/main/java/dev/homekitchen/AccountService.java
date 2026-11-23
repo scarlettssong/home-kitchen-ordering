@@ -46,7 +46,19 @@ class AccountService implements UserDetailsService {
         return accounts.findByLoginName(username).orElseThrow();
     }
 
-    void register(String username, String nickname, String password) {
+    void register(String username, String nickname, String password, String inviteCode) {
+        if (site.sharedMenu()) {
+            if (!site.registrationAvailable()) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        site.text("新食客注册暂未开放。", "Guest registration is temporarily closed."));
+            }
+            if (inviteCode == null || inviteCode.isBlank()) {
+                throw badRequest("请输入邀请码", "Enter an invitation code.");
+            }
+            if (!site.matchesRegistrationInvite(inviteCode)) {
+                throw badRequest("邀请码不正确", "The invitation code is incorrect.");
+            }
+        }
         String name = username.strip();
         if (site.sharedMenu() && (name.equalsIgnoreCase("Scarlett") || name.equalsIgnoreCase("Cris"))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,

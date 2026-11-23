@@ -36,7 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.url=${TEST_DB_URL}",
         "spring.datasource.username=${TEST_DB_USER}",
         "spring.datasource.password=${TEST_DB_PASSWORD}",
-        "kitchen.mode=shared-menu"
+        "kitchen.mode=shared-menu",
+        "kitchen.registration-invite-code=fixture-only-invite"
 })
 @AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @Transactional
@@ -45,6 +46,22 @@ class SharedMenuIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired EntityManager entities;
     @Autowired PasswordEncoder passwords;
+
+    @Test
+    void missingAndIncorrectInvitationCannotCreateAnAccount() throws Exception {
+        String password = UUID.randomUUID().toString();
+        String name = "InviteCandidate";
+        String required = """
+                {"username":"%s","password":"%s"}
+                """.formatted(name, password);
+        mvc.perform(post("/api/register").with(csrf()).contentType(MediaType.APPLICATION_JSON).content(required))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.detail").value("请输入邀请码"));
+        mvc.perform(post("/api/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(required.replace("}", ",\"inviteCode\":\"wrong-fixture\"}")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.detail").value("邀请码不正确"));
+        assertEquals(0, jdbc.queryForObject("select count(*) from kitchen_account where username = ?", Integer.class, name));
+        mvc.perform(get("/")).andExpect(content().string(org.hamcrest.Matchers.not(containsString("fixture-only-invite"))));
+    }
 
     @Test
     void editHeartbeatUsesTheExistingManagerSession() throws Exception {
@@ -106,7 +123,7 @@ class SharedMenuIntegrationTest {
     void registrationKeepsDisplayCaseAndRejectsASecondAccountWithDifferentCase() throws Exception {
         String password = UUID.randomUUID().toString();
         String registration = """
-                {"username":"CaseFixture","password":"%s","role":"ADMIN"}
+                {"username":"CaseFixture","password":"%s","role":"ADMIN","inviteCode":"fixture-only-invite"}
                 """.formatted(password);
         mvc.perform(post("/api/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(registration))
@@ -131,7 +148,7 @@ class SharedMenuIntegrationTest {
         for (String name : new String[] {"  sCaRlEtT  ", " cRiS "}) {
             mvc.perform(post("/api/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                             .content("""
-                                    {"username":"%s","password":"%s","role":"ADMIN"}
+                                    {"username":"%s","password":"%s","role":"ADMIN","inviteCode":"fixture-only-invite"}
                                     """.formatted(name, password)))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.detail").value("该用户名为店长保留，请使用其他用户名。"));
@@ -144,7 +161,7 @@ class SharedMenuIntegrationTest {
         String newPassword = UUID.randomUUID().toString();
         mvc.perform(post("/api/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"username":"PasswordFixture","password":"%s"}
+                                {"username":"PasswordFixture","password":"%s","inviteCode":"fixture-only-invite"}
                                 """.formatted(oldPassword)))
                 .andExpect(status().isCreated());
         String change = """
@@ -157,7 +174,7 @@ class SharedMenuIntegrationTest {
         String otherPassword = UUID.randomUUID().toString();
         mvc.perform(post("/api/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"username":"AnotherAccount","password":"%s"}
+                                {"username":"AnotherAccount","password":"%s","inviteCode":"fixture-only-invite"}
                                 """.formatted(otherPassword)))
                 .andExpect(status().isCreated());
         var guest = mvc.perform(post("/api/login").with(csrf()).param("username", "passwordfixture")

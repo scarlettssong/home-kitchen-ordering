@@ -19,6 +19,8 @@ const subcategories = new Map([
     ['Beef', text('牛肉', 'Beef')], ['Chicken', text('鸡肉', 'Chicken')], ['Pork', text('猪肉', 'Pork')]
 ]);
 const subcategoryFilters = byId('subcategory-filters');
+const cuisineIcon = byId('category-icon');
+const inviteField = byId('auth-form').elements.inviteCode;
 const defaultCategory = categories.keys().next().value;
 const tabs = document.querySelectorAll('[data-view]');
 const views = [...document.querySelectorAll('main[id]')];
@@ -278,7 +280,10 @@ function renderCategory() {
     const heading = byId('category-heading');
     heading.textContent = currentCategory;
     subcategoryFilters.hidden = !orderManagement || currentCategory !== 'Chinese';
-    heading.classList.toggle('with-subcategories', !subcategoryFilters.hidden);
+    if (orderManagement) {
+        cuisineIcon.setAttribute('href', `#cuisine-${currentCategory}`);
+        cuisineIcon.parentElement.removeAttribute('hidden');
+    }
     const count = byId('menu-count');
     count.textContent = text(`${visible.length} 道菜品`, `${visible.length} ${visible.length === 1 ? 'dish' : 'dishes'}`);
     count.hidden = false;
@@ -774,6 +779,11 @@ function setRegistrationMode(enabled) {
     registering = enabled;
     setFormError('auth-error');
     byId('register-nickname').hidden = !enabled;
+    const needsInvite = enabled && orderManagement;
+    byId('register-invite').hidden = !needsInvite;
+    inviteField.required = needsInvite;
+    inviteField.disabled = !needsInvite;
+    if (!needsInvite) inviteField.value = '';
     byId('toggle-register').textContent = enabled ? text('返回登录', 'Back to sign in') : text('新食客注册', 'Create an account');
     byId('auth-submit').textContent = enabled ? text('注册并登录', 'Register and sign in') : text('登录', 'Sign in');
     const password = byId('auth-form').elements.password;
@@ -839,6 +849,12 @@ async function submitAuth(event) {
     const fields = new FormData(form);
     const username = String(fields.get('username')).trim();
     const password = String(fields.get('password'));
+    const inviteCode = fields.get('inviteCode');
+    if (registering && orderManagement && !inviteCode?.trim()) {
+        setFormError('auth-error', text('请输入邀请码', 'Enter an invitation code.'));
+        inviteField.focus();
+        return;
+    }
     const submit = byId('auth-submit');
     const registration = byId('toggle-register');
     submit.disabled = true;
@@ -848,7 +864,7 @@ async function submitAuth(event) {
     try {
         await loadSession();
         if (registering) {
-            await sendJson('/api/register', 'POST', { username, password, nickname: fields.get('nickname') });
+            await sendJson('/api/register', 'POST', { username, password, nickname: fields.get('nickname'), inviteCode });
         }
         await authenticate(username, password);
         try {
@@ -872,6 +888,7 @@ async function submitAuth(event) {
         setFormError('auth-error', error.message);
     } finally {
         form.elements.password.value = '';
+        inviteField.value = '';
         submit.disabled = false;
         registration.disabled = false;
     }
@@ -1581,6 +1598,11 @@ function activateCategory(category, subcategory = '') {
 
 byId('refresh-orders').addEventListener('click', refreshOrders);
 byId('toggle-register').addEventListener('click', () => setRegistrationMode(registrationOpen && !registering));
+inviteField.addEventListener('invalid', event => {
+    event.preventDefault();
+    setFormError('auth-error', text('请输入邀请码', 'Enter an invitation code.'));
+    inviteField.focus();
+});
 byId('auth-form').addEventListener('submit', submitAuth);
 byId('logout').addEventListener('click', logout);
 byId('nickname-form').addEventListener('submit', saveNickname);
@@ -1594,7 +1616,7 @@ recipeSplit.addEventListener('change', updateRecipeScrollTarget);
 byId('edit-dish').addEventListener('click', editRecipe);
 editor.elements.category.querySelector('option[value="Thai"]').hidden = !orderManagement;
 editor.elements.price.required = !orderManagement;
-for (const [value, label] of [['', text('全部中餐', 'All Chinese dishes')], ...subcategories]) {
+for (const [value, label] of [['', text('全部', 'All')], ...subcategories]) {
     const control = button('cuisine-item', label, () => activateCategory('Chinese', value));
     control.dataset.subcategory = value;
     subcategoryFilters.append(control);
@@ -1642,6 +1664,7 @@ dialog.addEventListener('close', () => {
 });
 
 byId('toggle-register').hidden = !registrationOpen;
+byId('registration-paused').hidden = !orderManagement || registrationOpen;
 const savedNavigation = readNavigation();
 loadSession().catch(error => showNotice(error.message, true)).then(() => {
     activateCategory(savedNavigation.category);

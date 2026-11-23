@@ -46,7 +46,10 @@
                         <button class="cuisine-item" type="button" data-category="Dessert">{{dessert}}</button>
                     </nav>
                     <div class="category-panel">
-                        <h3 id="category-heading" class="category-heading"></h3>
+                        <h3 class="category-heading">
+                            <svg class="cuisine-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" hidden><use id="category-icon"></use></svg>
+                            <span id="category-heading"></span>
+                        </h3>
                         <div id="subcategory-filters" class="subcategory-filters" role="group" aria-label="{{subcategory}}" hidden></div>
                         <div id="full-dish-list" class="dish-grid">{{loading}}</div>
                     </div>
@@ -82,9 +85,11 @@
                     <label>{{username}}<input name="username" required autocomplete="username" maxlength="40"></label>
                     <label id="register-nickname" hidden>{{optionalNickname}}<input name="nickname" maxlength="60"></label>
                     <label>{{password}}<input name="password" type="password" required autocomplete="current-password" maxlength="72"></label>
+                    <label id="register-invite" hidden>{{invitationCode}}<input name="inviteCode" type="password" autocomplete="off" disabled></label>
                     <button id="auth-submit" class="primary-btn">{{signIn}}</button>
                 </form>
                 <button id="toggle-register" type="button" hidden class="secondary-btn">{{register}}</button>
+                <p id="registration-paused" class="registration-paused" hidden>{{registrationPaused}}</p>
             </section>
             <section id="logged-box" class="profile-panel" hidden>
                 <h2 class="profile-heading">{{profile}}</h2>
@@ -269,5 +274,24 @@
             </div>
         </form>
     </dialog>
+    <svg width="0" height="0" class="cuisine-symbols" aria-hidden="true" focusable="false">
+        <symbol id="cuisine-Chinese" viewBox="0 0 24 24">
+            <path d="M3 13h18a9 9 0 0 1-6 7H9a9 9 0 0 1-6-7Zm6 7v1h6v-1M6 10l12-7M9 10l11-4"/>
+        </symbol>
+        <symbol id="cuisine-Western" viewBox="0 0 24 24">
+            <path d="M5 3v5a3 3 0 0 0 6 0V3M8 3v18M18 3c-2.5 3-3 6-3 10h4M19 3v18"/>
+        </symbol>
+        <symbol id="cuisine-Japanese" viewBox="0 0 24 24">
+            <ellipse cx="12" cy="8" rx="8" ry="4"/>
+            <path d="M4 8v7c0 2.2 3.6 4 8 4s8-1.8 8-4V8"/>
+            <ellipse cx="12" cy="8" rx="2.4" ry="1.2"/>
+        </symbol>
+        <symbol id="cuisine-Thai" viewBox="0 0 24 24">
+            <path d="M16 7a4 4 0 0 1 5 4c-1 6-7 9-17 8 5-2 7-4 8-8 .6-2 2-3.4 4-4Zm2 0c0-2 1-3 3-4"/>
+        </symbol>
+        <symbol id="cuisine-Dessert" viewBox="0 0 24 24">
+            <path d="M4 11l10-5 6 5v8H4v-8Zm0 0h16m-16 4h16m-6-9V4m0 0 1-1"/>
+        </symbol>
+    </svg>
 </body>
 </html>
